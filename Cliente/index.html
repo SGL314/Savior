@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Cliente</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+	<link rel="stylesheet" href="geral.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<!--sem zoom-->
+</head>
+
+<body>
+	<h1 id="id">Cliente</h1>
+	<table>
+		<tr>
+			<th>seed</th>
+			<!-- <th>doubleTouch</th> -->
+			<th>tamBlock</th>
+			<th>qtCh.Dr.</th>
+			<th>fps</th>
+		</tr>
+		<tr>
+			<td id="seed"></td>
+			<!-- <td id="doubleTouch"></td> -->
+			<td id="tamBlock"></td>
+			<td id="qtCh.Dr."></td>
+			<td id="fps"></td>
+		</tr>
+	</table>
+	<button id="newMap">Novo Mapa</button>
+	<button id="checkConnection">Comm</button>
+	<button id="fullScreen" onclick="fullScreen()">[+]</button>
+
+	<pre id="res"></pre>
+	<pre id="chunk"></pre>
+	<!-- <pre id="log"></pre> -->
+	<script>
+		// document.getElementById("btn").onclick = async () => {
+		// 	const r = await fetch("/api/msg");
+		// 	const data = await r.json();
+		// 	document.getElementById("res").textContent = data.msg;
+		// };
+		var logsServer = [], tetoLogsServer = 3;
+		const log = (msg, add) => {
+			if (!add) document.getElementById("res").textContent = JSON.stringify(msg) + "\n";
+			else document.getElementById("res").textContent += JSON.stringify(msg) + "\n";
+		};
+		const logServer = (msg) => {
+			add = true;
+			// if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
+			logsServer.push(JSON.stringify(msg) + "\n");
+			if (logsServer.length >= tetoLogsServer) logsServer.shift();
+			document.getElementById("log").textContent = "";
+			logsServer.forEach(e => document.getElementById("log").textContent += e);
+		};
+
+		function entrarTelaCheia(document) {
+			if (document.requestFullscreen) {
+				document.requestFullscreen();
+			} else if (document.webkitRequestFullscreen) { // Safari/Chrome mais antigos
+				document.webkitRequestFullscreen();
+			} else if (document.msRequestFullscreen) { // IE/Edge mais antigos
+				document.msRequestFullscreen();
+			}
+		}
+		function sairTelaCheia() {
+			if (document.exitFullscreen) {
+				document.exitFullscreen();
+			} else if (document.webkitExitFullscreen) { // Safari/Chrome mais antigos
+				document.webkitExitFullscreen();
+			} else if (document.msExitFullscreen) { // IE/Edge mais antigos
+				document.msExitFullscreen();
+			}
+		}
+
+		// Para colocar o corpo (body) inteiro em tela cheia:
+		let screenIsFull = false;
+		function fullScreen() {
+			if (screenIsFull) {
+				entrarTelaCheia(document.documentElement);
+				screenIsFull = false;
+				document.getElementById("fullScreen").textContent = "[-]";
+			} else {
+				sairTelaCheia(document);
+				screenIsFull = true;
+				document.getElementById("fullScreen").textContent = "[+]";
+			}
+		}
+	</script>
+	<!-- <script src="./Auxs/auxiliar.js" defer></script> -->
+	<script src="main.js"></script>
+	<div id="localCanvas"></div>
+	<pre id="log"></pre>
+</body>
+
+</html>
