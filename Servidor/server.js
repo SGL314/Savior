@@ -3,6 +3,7 @@ import { pri, getId, getDate, getTime } from "../Auxs/auxiliar.js";
 import path from "path";
 import { Worker } from "worker_threads";
 import cors from "cors"; // 1. Importar o pacote
+import os from "os";
 
 const corsOptions = {
 	// Permite explicitamente a origem onde o seu cliente está rodando
@@ -34,8 +35,43 @@ app.get("/map", (req, res) => {
 	res.json({ msg: "Mapa salvo" });
 });
 //
+async function getRealHostIp(port) {
+    try {
+        // 1. Tenta resolver 'host.docker.internal', que muitas vezes aponta para o Host do Windows no WSL
+        const addresses = await new Promise((resolve, reject) => {
+            dns.lookup('host.docker.internal', { family: 4 }, (err, address, family) => {
+                if (err) return reject(err);
+                resolve(address);
+            });
+        });
+        
+        // Se a resolução funcionar, usa esse IP. Ele deve ser o IP do Windows Host.
+        if (addresses && addresses !== '127.0.0.1') {
+             // Retorna o IP do Host (Ex: 192.168.x.x)
+             return addresses; 
+        }
+
+    } catch (e) {
+        // Ignora erros de DNS, vamos tentar o método tradicional (fallback)
+    }
+
+    // 2. Fallback: Se não conseguir resolver o Host, retorna o IP do WSL
+    const interfaces = os.networkInterfaces();
+    for (const name in interfaces) {
+        for (const net of interfaces[name]) {
+            // Retorna o primeiro IP IPv4 que não é loopback
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address; // Este será o IP 172.x.x.x do WSL
+            }
+        }
+    }
+
+    return 'localhost';
+}
+
+const ipReal = await getRealHostIp(); // Obtém o IP real
 app.listen(portaCliente, '0.0.0.0', () => {
-	console.log("Servidor rodando em http://192.168.0.14:" + portaCliente, false);
+	console.log("Servidor rodando em http://"+ipReal+":" + portaCliente, false);
 });
 
 // game variables 
@@ -63,16 +99,19 @@ wss.on("connection", (ws) => {
 	let client = new Client(ws);
 	clients.push(client);
 	console.log("Cliente conectado. Total:", clients.length);
-	send(ws, JSON.stringify({ type: "initialMap", id: client.id, data: _map }));
-	send(ws, JSON.stringify({ type: "seed", seed: _seed }));
+	send(ws,{ type: "initialMap", id: client.id, data: _map });
+	send(ws,{ type: "seed", seed: _seed });
 
 	// Quando receber uma mensagem JSON do cliente
 	ws.on("message", (msg) => {
 		const data = JSON.parse(msg);
 		let fracId = data.id.split(" ")[0];
-		console.log("Recebido de " + fracId + " : " + data.type + "" + data.data.length + " " + getTime());
+		let withoutMap = ["formSeed"];
+		withoutMap.filter(e => e != data.type).forEach(e => console.log("Recebido de " + fracId + " : " + data.type + "" + data.data.length + " " + getTime()));
+		withoutMap.filter(e => e == data.type).forEach(e => console.log("Recebido de " + fracId + " : " + data.type + "" + " " + getTime()));
+		
 
-		// send(wsJSON.stringify({ type: "reply", data: "Recebi seu JSON!" })); // 1) Responder SÓ para o cliente que enviou
+		// send(ws,{ type: "reply", data: "Recebi seu JSON!" }); // 1) Responder SÓ para o cliente que enviou
 		let sendGeral = data;
 		var worker;
 		switch (data.type) {
@@ -81,7 +120,7 @@ wss.on("connection", (ws) => {
 
 				// broadcast(sendGeral);
 				broadcast(sendGeral);
-				send(ws, JSON.stringify({ type: "seed", seed: _seed }));
+				send(ws,{ type: "seed", seed: _seed });
 				break;
 			case "orderChunks":
 				for (let client of clients) {
@@ -102,13 +141,13 @@ wss.on("connection", (ws) => {
 				worker.on("message", (result) => {
 					// O resultado vem quando o cálculo termina
 					console.log("Enviando " + result.length + " chunks ordenados para ", fracId, ",", getTime());
-					send(ws, JSON.stringify({ type: "orderChunks", data: result }));
+					send(ws, { type: "orderChunks", data: result });
 				});
 
 				// 3. Lida com erros (importante!)
 				worker.on("error", (err) => {
 					console.error("Erro no Worker Thread:", err);
-					// send(wsJSON.stringify({ type: "error", msg: "Cálculo falhou." }));
+					// send(ws,{ type: "error", msg: "Cálculo falhou." });
 				});
 
 				// 4. Limpeza (opcional, mas recomendado)
@@ -118,7 +157,7 @@ wss.on("connection", (ws) => {
 				});
 
 				// Responde imediatamente ao cliente que o cálculo começou
-				// send(wsJSON.stringify({ type: "status", msg: "Iniciando cálculo do mapa..." }));
+				// send(ws,{ type: "status", msg: "Iniciando cálculo do mapa..." });
 				break;
 			case "map-orderChunks":
 				_map = data.data;
@@ -142,13 +181,13 @@ wss.on("connection", (ws) => {
 				worker.on("message", (result) => {
 					// O resultado vem quando o cálculo termina
 					console.log("Enviando " + result.length + " chunks ordenados para ", fracId, ",", getTime());
-					send(ws, JSON.stringify({ type: "orderChunks", data: result }));
+					send(ws, { type: "orderChunks", data: result });
 				});
 
 				// 3. Lida com erros (importante!)
 				worker.on("error", (err) => {
 					console.error("Erro no Worker Thread:", err);
-					// send(wsJSON.stringify({ type: "error", msg: "Cálculo falhou." }));
+					// send(ws,{ type: "error", msg: "Cálculo falhou." });
 				});
 
 				// 4. Limpeza (opcional, mas recomendado)
@@ -158,12 +197,12 @@ wss.on("connection", (ws) => {
 				});
 
 				// Responde imediatamente ao cliente que o cálculo começou
-				// send(wsJSON.stringify({ type: "status", msg: "Iniciando cálculo do mapa..." }));
-				// send(ws, JSON.stringify({ type: "seed", seed: _seed }));
+				// send(ws,{ type: "status", msg: "Iniciando cálculo do mapa..." });
+				// send(ws, { type: "seed", seed: _seed });
 				break;
 			case "formSeed":
 				formSeed();
-				broadcast(JSON.stringify({ type: "seed", seed: _seed }));
+				broadcast({ type: "seed", seed: _seed });
 				break;
 			default:
 				console.log("server.js - Tipo de dado desconhecido: " + data.type);
@@ -185,19 +224,18 @@ function formSeed() {
 
 // message
 function send(ws, msg) {
-	msg = JSON.parse(msg);
 	msg["time"] = getTime();
-	ws.send(JSON.stringify(msg))
+	ws.send(JSON.stringify(msg));
 }
 // Função pra enviar para todos
 function broadcast(obj) {
-	const json = JSON.stringify(obj);
+	const json = obj;
 	for (const c of clients) {
 		send(c.ws, json);
 	}
 }
 function broadcastExceptId(obj, id) {
-	const json = JSON.stringify(obj);
+	const json = obj;
 	for (const c of clients) {
 		if (c.id == id) continue;
 		send(c.ws, json);

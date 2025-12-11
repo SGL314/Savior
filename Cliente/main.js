@@ -10,6 +10,7 @@ var _seed = 0;
 var _id = 0;
 // variaveis de estado
 var gotInitialMap = false;
+var canAssembleMap = true;
 var lastTime = 0,lastTimeFps = 0;
 var qtChunksDrawed = 314;
 // variaveis moveis
@@ -56,6 +57,7 @@ function processData(data) {
 		// configs
 		case "seed":
 			_seed = data.seed;
+			canAssembleMap = true;
 			document.getElementById("seed").textContent = _seed;
 			break;
 		default:
@@ -66,6 +68,7 @@ function setup() {
 	const canvas = createCanvas(tamanho * tamBlock * coeExpantion, tamanho * tamBlock * coeExpantion);
 	// const canvas = createCanvas(960,960);
 	canvas.parent("localCanvas");
+	console.log("setup");
 
 	createFreeMap();
 	//
@@ -109,7 +112,9 @@ function createFreeMap() {
 function newMap() {
 	// noiseSeed(1234567890);
 	console.log("Creating new Map");
+	canAssembleMap = false;
 	ws.send(JSON.stringify({ type: "formSeed", id: _id }));
+	// while (!canAssembleMap) {}
 	return _newMap(true);
 }
 function _newMap(useSeed) {
@@ -381,7 +386,7 @@ function touchMoved() {
 
 // html/comunication
 document.getElementById("newMap").onclick = async () => {
-	ws.send(JSON.stringify({ type: "map", id: _id, pos: { x: _poss[0] / tamBlock, y: _poss[1] / tamBlock }, data: newMap() }));
+	send(JSON.stringify({ type: "map", id: _id, pos: { x: _poss[0] / tamBlock, y: _poss[1] / tamBlock }, data: newMap() }));
 	document.getElementById("checkConnection").textContent = "No connection !";
 	const r = await fetch('http://192.168.0.14:1234/checkConnection')
 	const data = await r.json();
@@ -416,4 +421,9 @@ function depuration(){
 	log("dep: "+Math.round((new Date() - lastTime)),true);
 	lastTime = new Date();
 	
+}
+function send(msg) {
+	msg = JSON.parse(msg);
+	msg["time"] = getTime();
+	ws.send(JSON.stringify(msg))
 }

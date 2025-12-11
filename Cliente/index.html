@@ -50,7 +50,7 @@
 			add = true;
 			// if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
 			logsServer.push(JSON.stringify(msg) + "\n");
-			if (logsServer.length >= tetoLogsServer) logsServer.shift();
+			if (logsServer.length > tetoLogsServer) logsServer.shift();
 			document.getElementById("log").textContent = "";
 			logsServer.forEach(e => document.getElementById("log").textContent += e);
 		};
