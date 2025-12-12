@@ -12,25 +12,29 @@
 
 <body>
 	<h1 id="id">Cliente</h1>
+	<h1 id="erro" style="display: none; color: red;"></h1>
 	<table>
 		<tr>
 			<th>seed</th>
-			<!-- <th>doubleTouch</th> -->
-			<th>tamBlock</th>
+			<!-- <th>tamBlock</th> -->
+			<th>zoom</th>
 			<th>qtCh.Dr.</th>
 			<th>fps</th>
+			<th>touches</th>
 		</tr>
 		<tr>
 			<td id="seed"></td>
 			<!-- <td id="doubleTouch"></td> -->
-			<td id="tamBlock"></td>
+			<td id="zoom"></td>
 			<td id="qtCh.Dr."></td>
 			<td id="fps"></td>
+			<td id="touches">---</td>
 		</tr>
 	</table>
 	<button id="newMap">Novo Mapa</button>
 	<button id="checkConnection">Comm</button>
 	<button id="fullScreen" onclick="fullScreen()">[+]</button>
+	<button id="refresh" onclick="refresh()">REF</button>
 
 	<pre id="res"></pre>
 	<pre id="chunk"></pre>
@@ -41,12 +45,14 @@
 		// 	const data = await r.json();
 		// 	document.getElementById("res").textContent = data.msg;
 		// };
-		var logsServer = [], tetoLogsServer = 3;
+		var logsServer = [], tetoLogsServer = 10;
 		const log = (msg, add) => {
+			// return;
 			if (!add) document.getElementById("res").textContent = JSON.stringify(msg) + "\n";
 			else document.getElementById("res").textContent += JSON.stringify(msg) + "\n";
 		};
 		const logServer = (msg) => {
+			// return;
 			add = true;
 			// if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
 			logsServer.push(JSON.stringify(msg) + "\n");
@@ -87,6 +93,9 @@
 				document.getElementById("fullScreen").textContent = "[+]";
 			}
 		}
+		document.getElementById('refresh').addEventListener('click', function () {
+			location.reload();
+		});
 	</script>
 	<!-- <script src="./Auxs/auxiliar.js" defer></script> -->
 	<script src="main.js"></script>
