@@ -540,7 +540,7 @@ function getChunk(x, y, useSeed) {
 					let m = (tWater - n) * coeExpantionToMetters;
 					let total = tWater * coeExpantionToMetters;
 					let colorWater = getColorByProf("water", m, total);
-					console.log(m);
+					console.log((m-m%5)/5);
 					blocks = [];
 					let t = 1;
 					if (initWithWater) {
