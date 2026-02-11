@@ -1,0 +1,12 @@
+0
+: 
+{height: 5, depth: 0, thing: 'water', hardness: 1, color: Array(4)}
+1
+: 
+{height: 5, depth: 0, thing: 'sand', hardness: 1, color: Array(4)}
+2
+: 
+{height: 15, depth: 5, thing: 'stone', hardness: 3, color: Array(4)}
+3
+: 
+{height: 80, depth: 20,

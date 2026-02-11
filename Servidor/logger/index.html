@@ -12,38 +12,37 @@
 
 <body>
 	<div class="geral">
-		<h1 id="id">Cliente</h1>
+		<h1 id="id">Servidor</h1>
 		<h1 id="erro" style="display: none; color: red;"></h1>
 		<table>
 			<tr>
 				<th>seed</th>
-				<!-- <th>tamBlock</th> -->
-				<th>zoom</th>
-				<th>qtCh.Dr.</th>
+				<th>tamanho</th>
+				<th>clientes</th>
+				<th>things</th>
 				<th>fps</th>
 				<th>touches</th>
-				<th>metters</th>
-				<!-- <th>queue</th> -->
-				<!-- <th>th1</th> -->
-				<!-- <th>th2</th> -->
-				<!-- <th>d1</th> -->
-				<!-- <th>d2</th> -->
+				<th>queue</th>
+				<th>th1</th>
+				<th>th2</th>
+				<th>d1</th>
+				<th>d2</th>
 			</tr>
 			<tr>
 				<td id="seed"></td>
-				<!-- <td id="doubleTouch"></td> -->
-				<td id="zoom"></td>
-				<td id="qtCh.Dr."></td>
+				<td id="tamanho"></td>
+				<td id="clientes"></td>
+				<td id="things"></td>
 				<td id="fps"></td>
 				<td id="touches">---</td>
-				<td id="metters">---</td>
-				<!-- <td id="queue">---</td> -->
-				<!-- <td id="th1">---</td> -->
-				<!-- <td id="th2">---</td> -->
-				<!-- <td id="d1">---</td> -->
-				<!-- <td id="d2">---</td> -->
+				<td id="queue">---</td>
+				<td id="th1">---</td>
+				<td id="th2">---</td>
+				<td id="d1">---</td>
+				<td id="d2">---</td>
 			</tr>
 		</table>
+		<button id="newMap">Novo Mapa</button>
 		<button id="checkConnection">Comm</button>
 		<button id="fullScreen" onclick="fullScreen()">[+]</button>
 		<button id="refresh" onclick="refresh()">REF</button>
@@ -51,11 +50,11 @@
 
 		<div style="display: flex; flex-direction: row;">
 			<!-- 0 -->
-			<div>
+			<div >
 				<pre id="log"></pre>
 				<pre id="chunk"></pre>
 			</div>
-			<div>
+			<div >
 				<pre id="logEsp0"></pre>
 				<pre id="logEsp1"></pre>
 				<pre id="logEsp2"></pre>
@@ -100,13 +99,13 @@
 				if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
 				else document.getElementById("log").textContent += JSON.stringify(msg) + "\n";
 			};
-			const logEsp = (msg, add, local) => {
+			const logEsp = (msg, add,local) => {
 				// return;
-				if (!add) document.getElementById("logEsp" + local).textContent = JSON.stringify(msg) + "\n";
-				else document.getElementById("logEsp" + local).textContent += JSON.stringify(msg) + "\n";
+				if (!add) document.getElementById("logEsp"+local).textContent = JSON.stringify(msg) + "\n";
+				else document.getElementById("logEsp"+local).textContent += JSON.stringify(msg) + "\n";
 			};
 			//
-			var logsServer = [], tetoLogsServer = 15;
+			var logsServer = [], tetoLogsServer = 10;
 			const logServer = (msg) => {
 				// return;
 				add = true;
@@ -116,7 +115,7 @@
 				document.getElementById("server").textContent = "";
 				logsServer.forEach(e => document.getElementById("server").textContent += e);
 			};
-
+			
 
 			function entrarTelaCheia(document) {
 				if (document.requestFullscreen) {
@@ -157,30 +156,9 @@
 			// toggleTheme(); // black no incio
 		</script>
 		<!-- <script src="./Auxs/auxiliar.js" defer></script> -->
-		<script src="main.js"></script>
+		<script src="getServer.js"></script>
 		<div id="localCanvas"></div>
-		<div style="display: flex; flex-direction: row; gap: 10px;">
-			<button class="interact" id="zoomIn">⬛</button>
-			<button class="interact" id="zoomOut">▪️</button>
-			<button class="interact" id="upLayer">▲</button>
-			<button class="interact" id="downLayer">▼</button>
-		</div>
-		<script>
-			document.getElementById("zoomIn").addEventListener('click', function () {
-				zoomIn();
-			});
-			document.getElementById("zoomOut").addEventListener('click', function () {
-				zoomOut();
-			});
-
-			document.getElementById("upLayer").addEventListener('click', function () {
-				moveLayer(-1);
-			});
-			document.getElementById("downLayer").addEventListener('click', function () {
-				moveLayer(1);
-			});
-		</script>
-		<br>
+		
 	</div>
 </body>
 

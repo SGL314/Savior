@@ -1,28 +1,25 @@
 // 14/12/2025 22h45
 // constantes
-const ipGeral = "192.168.0.11"; //10.96.160.102
+const ipGeral = "192.168.0.15"; //10.96.160.102
 const porta = 3000;
 const tamanho = 30;
-const coeExpantion = 2;
+const coeExpantion = 4;
 const FPS_LIMIT = 20;
 const FRAME_TIME_MS = 1000 / FPS_LIMIT;
-var tamBlock = 5; // 30
+var tamBlock = 360 / (tamanho * coeExpantion); // 3
 const erros = [
 	["ERRO-001", "Sem chunks a enviar;\nlogicChunk(); sending"],
 	["ERRO-002", "Chunk não encontrado para atualização"], // processAttChunk(data)
-	["ERRO-003", "Tipo de funcDraw() de buttons não definido"], // buttons
 ];
-const tamanhoMaximo = [4, 1]; // 40,20
+const tamanhoMaximo = [2, 2]; // 40,20
 // variaveis
 var _map = [];
-var _seed = 1234;
+var _seed = 0;
 // variaveis de configuração
 var _id = 0;
-var stepDefaultMetters = 5;
+var stepDefaultMetters = 0.05;
 var stepMetters = stepDefaultMetters;
-var coeExpantionToMetters = 1;
-var borderInChunks = true;
-var initWithWater = false;
+var coeExpantionToMetters = 100;
 // variaveis de estado
 var activation = { "processData": true };
 var gotInitialMap = false;
@@ -35,19 +32,18 @@ var lastFrameStart = 0;
 var now = new Date();
 var _mapOrderQueue = [];
 var _chunksToRecreateQueue = [];
-var _chunksQueue = []; //
+var _chunksQueue = []; // 🛑 VARIÁVEL FALTANTE: Fila para geração de novos chunks
 var isProcessingMapOrder = false;
 var isRecreatingGraphics = false;
-var isGeneratingChunks = false; //
+var isGeneratingChunks = false; // 🛑 VARIÁVEL FALTANTE: Flag para controlar a fila de geração
 // variaveis moveis
-var loop = -1;
 var metters = 0;
 var selectPutting = "";
 let _chunk = [0, 0];
 let _poss = [tamBlock / 2, tamBlock / 2];
-_poss[0] += 11 * tamBlock + 1 * tamanho * tamBlock; // teste
-_poss[1] += 10 * tamBlock; // teste
-var zoom = 4, initZoom = 1; // tudo 1
+_poss[0] += 21 * tamBlock; // teste
+_poss[1] += 6 * tamBlock; // teste
+var zoom = 2, initZoom = 1; // tudo 1
 // variaveis de iteração
 var initializedDoubleTouch = false
 var startedTouch = [0, 0];
@@ -68,21 +64,13 @@ function processData(data) {
 	lastTime = new Date();
 
 	// 🛑 REMOVER O BLOCO WHILE (waitDoMap): Este tipo de loop síncrono bloqueia o navegador.
-	// data.type = "seed";
-	let comms = ["seed", "configs"];
-	let foundComm = false;
-	for (let comm of comms) {
-		if (comm == data.type) {
-			foundComm = true;
-			logServer(data.type + " " + data.time);
-			break;
-		}
-	}
-	if (!foundComm) logServer(data.type + data.data.length + " " + data.time);
+
+	let comms = ["seed"];
+	comms.filter(e => e != data.type).forEach(e => logServer(data.type + data.data.length + " " + data.time));
+	comms.filter(e => e == data.type).forEach(e => logServer(data.type + " " + data.time));
 	// activation["processData"] = false;
 	switch (data.type) {
 		case "newMap": // usa o cliente só pra fazer o mapa
-			console.log("newMap");
 			let mapSend = newMap();
 			let _safeMapToSend = mapSend.map(chunk => {
 				return {
@@ -94,7 +82,7 @@ function processData(data) {
 				};
 			});
 			send({ type: "newMap", id: _id, data: _safeMapToSend });
-			// location.reload();
+			location.reload();
 			break;
 		case "map":
 		case "orderChunks":
@@ -109,17 +97,10 @@ function processData(data) {
 		case "attChunks": // precisa recalcular o hash e recriar o gráfico
 			setTimeout(() => { processAttChunk(data) }, 0);
 			break;
-		case "configs":
-			console.log(data.id);
-			_id = data.id; // 🛑 2. INICIALIZAÇÃO CRÍTICA
-			stepDefaultMetters = data.game.stepDefaultMetters;
-			stepMetters = stepDefaultMetters;
-			coeExpantionToMetters = data.game.coeExpantionToMetters;
-			break;
 		case "initialMap":
 			_mapOrderQueue.push(data.data); // 🛑 1. ENFILEIRA A NOVA ORDEM DO MAPA
 
-
+			_id = data.id; // 🛑 2. INICIALIZAÇÃO CRÍTICA
 			document.getElementById("id").textContent += " " + _id.split(" ")[0];
 			gotInitialMap = true; // 🛑 Necessário para logicChunks() iniciar
 
@@ -148,7 +129,6 @@ function processData(data) {
 		case "seed":
 			_seed = data.seed; // 🛑 CONFIGURAÇÃO INICIAL DA SEED
 			canAssembleMap = true;
-			console.log("seed " + _seed);
 			document.getElementById("seed").textContent = _seed;
 			break;
 
@@ -174,38 +154,40 @@ function processGraphicsQueue(layer) {
 		let chunk = _chunksToRecreateQueue.shift();
 		// console.log("Recriando gráfico para chunk (" + chunk.x + ", " + chunk.y + ") => " + layer);
 		if (!chunk.graphics || chunk) { //  && (chunk.graphics.length != layers || chunk.graphics.length + 1 < layer)
-			// console.log(chunk.graphics);
+
 			// Lógica de recriação do graphics (o trabalho que demorava 333ms)
 			let chunkGraphics = [];
 			// 1 / stepDefaultMetters             1
-
-			chunkGraphics = createGraphics(chunkSizePx, chunkSizePx);
-			chunkGraphics.noStroke();
-			// console.log("Recriando graphics de: "+chunk.x+","+chunk.y);
+			for (let i = 0; i < 1 / stepDefaultMetters; i++) {
+				chunkGraphics.push(0);
+			}
+			for (let i = layer; i < layer + 1; i++) {
+				chunkGraphics[i] = createGraphics(chunkSizePx, chunkSizePx);
+				chunkGraphics[i].noStroke();
+			}
 
 			// 🛑 CÓDIGO DE DESENHO COMPLETO INCLUÍDO AQUI
 			for (let i = 0; i < tamanho; i++) {
-				let blocks = chunk.chunk[i];
-				// console.log(blocks);
-				let draws = drawBlock(blocks);
-				for (let k = 0; k < draws.length; k++) { // 20 paradas
-					if ((i == 0 || i == tamanho - 1) && borderInChunks) chunkGraphics.stroke(1);
-					else chunkGraphics.noStroke();
-					// console.log(draws[k]);
-					chunkGraphics.fill(draws[k][2]); // 2: é a cor propriamente dita
-					chunkGraphics.rect(i * tamBlock, (draws[k][0] - draws[k][1]) * tamBlock / (stepDefaultMetters * coeExpantionToMetters), tamBlock, tamBlock * draws[k][1] / (stepDefaultMetters * coeExpantionToMetters));
-					// console.log(i,k);
+				for (let j = 0; j < tamanho; j++) {
+					let blocks = chunk.chunk[i][j];
+					let draws = drawBlock(blocks);
+					for (let k = layer; k < layer + 1; k++) { // 1 / stepDefaultMetters
+						chunkGraphics[k].fill(draws[k]);
+						chunkGraphics[k].rect(i * tamBlock, j * tamBlock, tamBlock, tamBlock);
+					}
 				}
 			}
 			// 🛑 FIM DO CÓDIGO DE DESENHO COMPLETO
-			// console.log("(" + _chunksToRecreateQueue.length + ") layerress: " + chunk.x);
-			// console.log(chunk, chunkGraphics);
-			// if (!chunk.graphics) chunk.graphics = chunkGraphics;
-			// else {
-			// 	// console.log("Recriado gráfico layer " + layer + " para chunk (" + chunk.x + ")");
-			// }
-			chunk.graphics = chunkGraphics;
-			// console.log(chunk.chunk);
+			console.log("(" + _chunksToRecreateQueue.length + ") layerress: " + chunk.x + ", " + chunk.y);
+			console.log(chunk, chunkGraphics);
+			if (!chunk.graphics) chunk.graphics = chunkGraphics;
+			else {
+				for (var i = 0; i < chunk.graphics.length; i++) {
+					if (chunkGraphics[i] == 0) continue;
+					chunk.graphics[i] = chunkGraphics[i];
+					console.log("Recriado gráfico layer " + i + " para chunk (" + chunk.x + ", " + chunk.y + ")");
+				}
+			}
 
 			// Limpa o placeholder após o gráfico estar pronto
 			if (chunk.placeholderGraphics) {
@@ -366,15 +348,15 @@ function setup() {
 	const canvas = createCanvas(tamanho * tamBlock * coeExpantion, tamanho * tamBlock * coeExpantion);
 	// const canvas = createCanvas(960,960);
 	canvas.parent("localCanvas");
-	// createFreeMap();
 	console.log("setup");
 
 	noLoop();
+	createFreeMap();
 	defineButtons();
 	requestAnimationFrame(manualDrawLoop); // 🛑 Inicia o loop manual.
 }
 function manualDrawLoop(timestamp) {
-	loop++;
+
 	// 1. EXECUTA O DRAW (O SEU CÓDIGO DE RENDERIZAÇÃO)
 	draw();
 
@@ -403,7 +385,7 @@ function draw() {
 	log("", false);
 	log("init: " + Math.round((new Date() - lastTime)), true);
 	lastTime = new Date();
-	background("#5a83ffff");
+	background("#ae00ffff");
 	toroide();
 
 	// --- 1. DESENHO DO MAPA (ISOLADO) ---
@@ -449,7 +431,7 @@ function draw() {
 // create
 
 function createFreeMap() {
-	_newMap(true);
+	_newMap(false);
 }
 function newMap() {
 	// noiseSeed(1234567890);
@@ -459,11 +441,10 @@ function newMap() {
 	return _newMap(true);
 }
 function _newMap(useSeed) {
-	console.log("Creating " + useSeed);
+	log("Creating " + useSeed);
 	let map = [];
-	// não dá pra não criar tudo se não da bug no waterfall
-	for (let i = -(tamanhoMaximo[0] - 1) - 1; i <= tamanhoMaximo[0] - 1; i++) {
-		for (let j = -(tamanhoMaximo[1] - 1); j <= tamanhoMaximo[1] - 1; j++) {
+	for (let i = -(coeExpantion - 1); i <= coeExpantion - 1; i++) {
+		for (let j = -(coeExpantion - 1); j <= coeExpantion - 1; j++) {
 			let chunk = getChunk(i, j, useSeed);
 			map.push(chunk);
 		}
@@ -471,11 +452,10 @@ function _newMap(useSeed) {
 	return map;
 }
 function getChunk(x, y, useSeed) {
-	console.log("getChunk: " + x + ", " + y + " - " + getTime());
 	// 1. Configurações de Perlin Noise
-	noiseDetail(8, 0.2); // default: 8, 0.2
+	noiseDetail(8, 0.2);
 	noiseSeed(_seed);
-	let coeExpantionEarth = 1; // min make bigger; max make smaller 
+	let coeExpantionEarth = 80; // min make bigger; max make smaller 
 	let vari = stepDefaultMetters * coeExpantionEarth; // 0.01 = 1m
 	var desconfiguraPatterns = [
 		-17124165,
@@ -492,179 +472,197 @@ function getChunk(x, y, useSeed) {
 
 	// 2. Cria o buffer gráfico (Canvas offscreen)
 	let chunkSizePx = tamanho * tamBlock;
-	let chunkGraphics = createGraphics(chunkSizePx, chunkSizePx);
-	chunkGraphics.noStroke();
+	let chunkGraphics = [];
+	for (let i = 0; i < 1 / stepDefaultMetters; i++) {
+		chunkGraphics.push(createGraphics(chunkSizePx, chunkSizePx));
+		chunkGraphics[i].noStroke();
+	}
 	// console.log(chunkGraphics.length);
 	if (useSeed) {
 		for (let i = 0; i < tamanho; i++) {
+			chunk.push([]);
+			for (let j = 0; j < tamanho; j++) {
 
-			let gx = x * tamanho + i;
-			let ax = gx;
-			let tx = ax;
+				// ... dentro dos loops i e j ...
 
-			let blend = 1;
+				// 1. Definições do Mapa
+				let worldW = tamanhoMaximo[0] * tamanho;
+				let worldH = tamanhoMaximo[1] * tamanho;
 
-			if (x <= -tamanhoMaximo[0] + 1) {
-				// 90 - (3 - 1) * 30 = 90 - 60 = 30
-				t = (abs(gx) - (tamanhoMaximo[0] - 1) * tamanho) / (tamanho * 2)
-				blend = 1 / (1 + Math.exp(t * 10))
-			}
-			if (x >= tamanhoMaximo[0] - 2) {
-				// 90 - (3 - 1) * 30 = 90 - 60 = 30
-				t = (gx - (tamanhoMaximo[0] - 1) * tamanho) / (tamanho * 2)
-				blend = 1 / (1 + Math.exp(t * 10))
-			}
+				let gx = x * tamanho + i;
+				let gy = y * tamanho + j;
 
-			// tx = tx * vari * blend;
+				// 2. Coordenadas Angulares (0 a 2PI)
+				let ax = (gx / worldW) * Math.PI * 2;
+				let ay = (gy / worldH) * Math.PI * 2;
 
-			// noise limitado
-			let n = noise(
-				tx * vari + desconfiguraPatterns[0]
-			) * blend; // from 0.0 to 1.0
-			// Geração de Bioma/Bloco
-			let thing = "water";
-			let tWater = 0.35;
-			if (n < tWater) thing = "water";
-			else if (n < 0.40) thing = "sand";
-			else if (n < 0.55) thing = "earth";
-			else if (n < 0.75) thing = "stone";
-			else thing = "snow";
-			// definition blocks
-			let blocks = [];
-			//
-			let gapTerrenoAcima = 50; // addIt
-			let tamBlk = 1;
+				// 3. Geometria do Toro (Donut)
+				// R = Raio Maior (o tamanho do anel)
+				// r = Raio Menor (a grossura do tubo)
+				// Ajuste 'vari' aqui para mudar o zoom do noise
+				let R = 2.0;
+				let r = 0.8;
 
-			switch (thing) {
-				case "water":
-					let m = (tWater - n) * coeExpantionToMetters;
-					let total = tWater * coeExpantionToMetters;
-					let colorWater = getColorByProf("water", m, total);
-					console.log(m);
-					blocks = [];
-					let t = 1;
-					if (initWithWater) {
-						t = m;
-						for (let h = 0; h < t; h += tamBlk) {
-							blocks.push(
-								{
-									height: tamBlk,
-									depth: h,
-									thing: thing,
-									hardness: 1,
-									color: colorWater
-								}
-							);
-						}
-					}
-					t = (0.1) * coeExpantionToMetters;
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
+				// Coordenadas originais do Toro
+				// Isso mapeia o 2D para a superfície de um donut em 3D
+				let torusX = (R + r * Math.cos(ay)) * Math.cos(ax);
+				let torusY = (R + r * Math.cos(ay)) * Math.sin(ax);
+				let torusZ = r * Math.sin(ay);
+
+				// 🛑 4. O PULO DO GATO: ROTAÇÃO DE EIXOS
+				// O problema do espelho é que o Toro original é simétrico no eixo Z.
+				// Vamos girar essas coordenadas para misturar o eixo Z (anti-simétrico) com o Y.
+				// Isso "bagunça" a simetria e remove o espelho.
+
+				let angle = Math.PI / 4; // 45 graus
+				let cosA = Math.cos(angle);
+				let sinA = Math.sin(angle);
+
+				// Rotaciona em torno do eixo X
+				let finalX = torusX;
+				let finalY = torusY * cosA - torusZ * sinA;
+				let finalZ = torusY * sinA + torusZ * cosA;
+
+				// 5. Gera o Ruído
+				// Multiplica por 'vari' para controlar a escala (zoom) das texturas
+				let n = noise(
+					finalX * vari + desconfiguraPatterns[0],
+					finalY * vari + desconfiguraPatterns[1],
+					finalZ * vari
+				);
+
+				// ... continua com a lógica de biomas (if n < tWater ...)
+
+				// console.log(n);
+				// let n = noise((i + sx * tamanho + desconfiguraPatterns) * vari,
+				// 	(j + sy * tamanho + desconfiguraPatterns) * vari,
+				// 	sz*vari
+				// );
+				// Geração de Bioma/Bloco
+				let thing = "water";
+				let tWater = 0.35;
+				if (n < tWater) thing = "water";
+				else if (n < 0.40) thing = "sand";
+				else if (n < 0.55) thing = "earth";
+				else if (n < 0.75) thing = "stone";
+				else thing = "snow";
+				// definition blocks
+				let blocks = [];
+
+				switch (thing) {
+					case "water":
+						let colorWater = getColor(thing);
+						colorWater = [colorWater[0],
+						(getColor("-shallowwater")[1] - colorWater[1]) * n / tWater + colorWater[1],
+						(getColor("-shallowwater")[2] - colorWater[2]) * n / tWater + colorWater[2],
+							255];
+						blocks = [
+							{ // sem agua no começo
+								height: (tWater - n) * coeExpantionToMetters,
+								depth: 0,
+								thing: thing,
+								hardness: 1,
+								color: colorWater
+							},
 							{
-								height: tamBlk,
-								depth: h + Math.round(m * variMin) / variMin,
+								height: (0.1) * coeExpantionToMetters,
+								depth: Math.round(((tWater - n) * coeExpantionToMetters) * variMin) / variMin,
 								thing: "sand",
-								hardness: 2,
+								hardness: 1,
 								color: getColor("sand")
 							}
-						);
-					}
-					break;
-				case "earth":
-					t = 10;
-					blocks = []
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
+						];
+						if (x!=0 && y!=0) { 
+							blocks = [
+							// { // sem agua no começo
+							// 	height: (tWater - n) * coeExpantionToMetters,
+							// 	depth: 0,
+							// 	thing: thing,
+							// 	hardness: 1,
+							// 	color: colorWater
+							// },
 							{
-								height: tamBlk,
-								depth: h,
+								height: (0.1) * coeExpantionToMetters,
+								depth: Math.round(((tWater - n) * coeExpantionToMetters) * variMin) / variMin,
+								thing: "sand",
+								hardness: 1,
+								color: getColor("sand")
+							}
+						];
+						}
+						break;
+					case "earth":
+						blocks = [
+							{
+								height: 10,
+								depth: 0,
 								thing: thing,
-								hardness: thing === "stone" ? 3 : 2,
+								hardness: thing === "stone" ? 3 : 1,
 								color: getColor(thing)
 							}
-						);
-					}
-					break;
-				default:
-					t = 5;
-					blocks = []
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
+						];
+						break;
+					default:
+						blocks = [
 							{
-								height: tamBlk,
-								depth: h,
+								height: 5,
+								depth: 0,
 								thing: thing,
-								hardness: thing === "stone" ? 3 : 2,
+								hardness: thing === "stone" ? 3 : 1,
 								color: getColor(thing)
 							}
-						);
-					}
-					break;
-			}
-			// gapTerreno
-			for (let b of blocks) {   // addIt
-				b.depth += gapTerrenoAcima;
-			}
-			// subsolo
-			let initDepth = blocks[blocks.length - 1].depth + blocks[blocks.length - 1].height, l1 = 15;
-			blocks.push({
-				height: l1,
-				depth: initDepth,
-				thing: "stone",
-				hardness: 3,
-				color: getColor("stone")
-			});
-			blocks.push({
-				height: 200,
-				depth: initDepth + l1,
-				thing: "rock",
-				hardness: 5,
-				color: getColor("rock")
-			});
-			// deixa as paradas limpas
-			for (let b of blocks) {
-				b.height = Math.round(b.height * variMin) / variMin;
-				b.depth = Math.round(b.depth * variMin) / variMin;
-			}
-			//
+						];
+				}
+				// subsolo
+				let initDepth = blocks[blocks.length - 1].depth + blocks[blocks.length - 1].height, l1 = 15;
+				blocks.push({
+					height: l1,
+					depth: initDepth,
+					thing: "stone",
+					hardness: 3,
+					color: getColor("stone")
+				});
+				blocks.push({
+					height: (100 - (initDepth + l1)),
+					depth: initDepth + l1,
+					thing: "rock",
+					hardness: 5,
+					color: getColor("rock")
+				});
+				//
 
-			chunk[i] = blocks;
+				chunk[i].push(blocks);
 
-			// Desenha o bloco no buffer gráfico
-			let draws = drawBlock(blocks);
-			for (let k = 0; k < draws.length; k++) { // 20 paradas
-				if ((i == 0 || i == tamanho - 1) && borderInChunks) chunkGraphics.stroke(1);
-				else chunkGraphics.noStroke();
-				chunkGraphics.fill(draws[k][2]);
-				chunkGraphics.rect(i * tamBlock, (draws[k][0] - draws[k][1]) * tamBlock / (stepDefaultMetters * coeExpantionToMetters), tamBlock, tamBlock * draws[k][1] / (stepDefaultMetters * coeExpantionToMetters));
+				// Desenha o bloco no buffer gráfico
+				let draws = drawBlock(blocks);
+				for (let k = metters / (stepDefaultMetters * coeExpantionToMetters); k < metters / (stepDefaultMetters * coeExpantionToMetters) + 1; k++) {
+					chunkGraphics[k].fill(draws[k]);
+					chunkGraphics[k].rect(i * tamBlock, j * tamBlock, tamBlock, tamBlock);
+				}
 			}
-
 		}
-	}
-	else {
-		console.log("sem seed");
+	} else {
 		// Se não usar seed (Mapa Inicial Vazio)
 		let thing = "-nada-";
+		let col = getColor(thing);
 		let blocks = [
 			{
 				height: 100,
 				depth: 0,
-				thing: thing, hardness: 700, color: getColor(thing)
+				thing: thing, hardness: 1, color: col
 			}
 		];
 
+		let draws = drawBlock(blocks);
+		for (let k = 0; k < 1 / stepDefaultMetters; k++) {
+			chunkGraphics[k].fill(draws[k]);
+			chunkGraphics[k].rect(0, 0, chunkSizePx, chunkSizePx);
+		}
 		for (let i = 0; i < tamanho; i++) {
 			chunk.push([]);
-
-			let draws = drawBlock(blocks);
-			for (let k = 0; k < draws.length; k++) {
-				if ((i == 0 || i == tamanho - 1) && borderInChunks) chunkGraphics.stroke(1);
-				else chunkGraphics.noStroke();
-				chunkGraphics.fill(draws[k][2]);
-				chunkGraphics.rect(i * tamBlock, (draws[k][0] - draws[k][1]) * tamBlock / (stepDefaultMetters * coeExpantionToMetters), tamBlock, tamBlock * draws[k][1] / (stepDefaultMetters * coeExpantionToMetters));
+			for (let j = 0; j < tamanho; j++) {
+				chunk[i].push(blocks);
 			}
-			// console.log(draws[0]);
-			chunk[i] = blocks;
 		}
 	}
 
@@ -685,8 +683,7 @@ function getColor(thing) { // retorna array RGB por bioma
 	"#002878"
 	"#0078ff"
 	"rgba(136, 61, 0, 1)"
-	"#rgba(0, 0, 0, 0.26)"
-
+	"#rgba(49, 49, 49, 1)"
 	switch (thing) { // escolhe cor
 		case "water": return [0, 40, 120, 255]; // azul profundo
 		case "-shallowwater": return [0, 120, 255, 255]; // azul claro 
@@ -695,53 +692,73 @@ function getColor(thing) { // retorna array RGB por bioma
 		case "stone": return [110, 110, 110, 255]; // pedra
 		case "snow": return [255, 255, 255, 255]; // neve
 		case "rock": return [50, 50, 50, 255]; // rocha
-		case "fundoTransparente": return [0, 0, 0, 0];
-		case "space": return [0, 0, 0, 64];
 		default: return [255, 0, 255, 255]; // nada
 	}
 }
-function getColorByProf(thing, m, total) {
-	// console.log(m, total);
-	let colorWater = getColor(thing);
-	return [colorWater[0],
-	(getColor("-shallowwater")[1] - colorWater[1]) * (1 - m / total) + colorWater[1],
-	(getColor("-shallowwater")[2] - colorWater[2]) * (1 - m / total) + colorWater[2],
-		255];
-}
 function drawBlock(blocks) {
 	let finalColors = [];
-	// console.log("---")
-	// console.log(blocks);
-	for (let j = 0; j < blocks.length; j++) {
-		// console.log(blocks[j].depth + blocks[j].height);
-		finalColors.push([blocks[j].depth + blocks[j].height, blocks[j].height, blocks[j].color]);
-	}
-	// console.log(finalColors)
-	// taka os espaços vazios
-	let res = [];
-	for (let i = 0; i < finalColors.length; i++) {
-		res.push(finalColors[i]);
-		if (i < finalColors.length - 1) {
-			if (finalColors[i][0] != finalColors[i + 1][0] - finalColors[i + 1][1]) {
-				res.push([finalColors[i + 1][0] - finalColors[i + 1][1], (finalColors[i + 1][0] - finalColors[i + 1][1]) - finalColors[i][0], getColor("fundoTransparente")]);
+	for (let i = 0; i < 1 / stepDefaultMetters; i++) {
+		// console.log(">"+i* stepDefaultMetters * coeExpantionToMetters);
+		for (let j = 0; j < blocks.length; j++) {
+			// console.log(blocks[j].depth + blocks[j].height);
+			if (blocks[j].depth + blocks[j].height > i * stepDefaultMetters * coeExpantionToMetters) {
+				finalColors.push(blocks[j].color);
+				// console.log(j);
+				break;
 			}
 		}
 	}
 	return finalColors;
 }
 
+//
+
+function recreateChunkGraphics(mapData) {
+	let chunkSizePx = tamanho * tamBlock;
+
+	mapData.forEach(chunk => {
+		// Ignora chunks que, por acaso, já tenham graphics
+		if (chunk.graphics) return;
+
+		let chunkGraphics = [];
+		for (let i = 0; i < 1 / stepDefaultMetters; i++) {
+			chunkGraphics.push(createGraphics(chunkSizePx, chunkSizePx));
+			chunkGraphics[i].noStroke();
+		}
+
+		// Desenha o conteúdo do chunk no buffer
+		for (let i = 0; i < tamanho; i++) {
+			for (let j = 0; j < tamanho; j++) {
+				let blocks = chunk.chunk[i][j];
+
+				// Usa a cor e o tamBlock original para desenhar
+				let draws = drawBlock(blocks);
+				for (let k = 0; k < 1 / stepDefaultMetters; k++) {
+					chunkGraphics[k].fill(draws[k]);
+					chunkGraphics[k].rect(i * tamBlock, j * tamBlock, tamBlock, tamBlock);
+				}
+			}
+		}
+
+		// Adiciona a propriedade graphics de volta ao chunk
+		chunk.graphics = chunkGraphics;
+	});
+
+	return mapData;
+}
 function calculateRenderHash(chunkData) {
 	let hash = 0;
 	// Percorre apenas os dados que definem a aparência
-	// console.log(chunkData);
 	for (let i = 0; i < tamanho; i++) {
-		// Usa o código da cor (ou outro identificador numérico) para o hash.
-		// Se a cor for uma string (ex: "#00FF00"), você precisará de uma conversão.
-		// Para simplicidade, vamos somar os códigos ASCII da string de cor.
-		for (let l = 0; l < chunkData[i].length; l++) {
-			const colorString = drawBlock(chunkData[i])[l].toString();
-			for (let k = 0; k < colorString.length; k++) {
-				hash += colorString.charCodeAt(k);
+		for (let j = 0; j < tamanho; j++) {
+			// Usa o código da cor (ou outro identificador numérico) para o hash.
+			// Se a cor for uma string (ex: "#00FF00"), você precisará de uma conversão.
+			// Para simplicidade, vamos somar os códigos ASCII da string de cor.
+			for (let l = 0; l < 1 / stepDefaultMetters; l++) {
+				const colorString = drawBlock(chunkData[i][j])[l].toString();
+				for (let k = 0; k < colorString.length; k++) {
+					hash += colorString.charCodeAt(k);
+				}
 			}
 		}
 	}
@@ -753,10 +770,28 @@ function doMap() {
 
 	let camWorldX = _poss[0];
 	let camWorldY = _poss[1];
-	translate(width / 2, height / 2);
-	scale(zoom);
-	translate(-camWorldX, -camWorldY);
 
+	// -------------------------------------------------------------------------
+	// 🛑 TRANSFORMAÇÃO CORRETA PARA CENTRALIZAR O ZOOM NA CÂMERA (_poss)
+	// 1. Centraliza a tela para ter o centro como ponto de pivot
+	translate(width / 2, height / 2);
+
+	// 2. Translação Inversa: Move o ponto da câmera (_poss) para a origem.
+
+	// 3. Aplica a escala (zoom). O zoom é aplicado em torno da origem (o ponto da câmera).
+	scale(zoom);
+
+	// 4. Translação Final: Move o mundo de volta para a posição correta, agora escalada.
+	translate(-camWorldX, -camWorldY);
+	// translate(camWorldX, camWorldY);
+
+	// 5. Translação Final de Câmera (ajuste de posicionamento)
+	let x = -_poss[0];
+	let y = -_poss[1];
+	// translate(x, y);
+
+	// -------------------------------------------------------------------------
+	// Culling (Visibilidade)
 	let viewWidth = width / zoom;
 	let viewHeight = height / zoom;
 	let viewLeft = camWorldX - viewWidth / 2;
@@ -770,11 +805,6 @@ function doMap() {
 	let indGraphics = metters / (stepDefaultMetters * coeExpantionToMetters);
 	let process = false;
 	let verifyRecreate = [];
-	let txt = "";
-	let chNow = [
-		Math.floor(_poss[0] / (tamBlock * tamanho)),
-		Math.floor(_poss[1] / (tamBlock * tamanho))
-	];
 
 	_map.forEach(chunk => {
 		// try {
@@ -786,21 +816,18 @@ function doMap() {
 			return;
 		}
 		// Verifica se o chunk está visível no viewport atual
-		// if (chunk.x==1) console.log(infinitePlanetView(chunk,x,y));
-		let _inf = infinitePlanetView(chunk, chNow[0], chNow[1]);
-		let inf = _inf[0];
-		let moveNow = _inf[1];
 		if (!isChunkVisible(chunk, viewLeft, viewRight, viewTop, viewBottom)) {
-			if (!inf) return;
+			return;
 		}
 		// ... (verificação isChunkVisible) ...
 
+		qtChunksDrawed++;
 
 
 		// 🛑 PRIORIDADE: 1. Graphics Pronto, 2. Graphics Placeholder
 		let graphicToDraw;
 		try {
-			graphicToDraw = (chunk.graphics) ? chunk.graphics : chunk.placeholderGraphics;
+			graphicToDraw = (chunk.graphics[indGraphics]) ? chunk.graphics[indGraphics] : chunk.placeholderGraphics[indGraphics];
 			if (graphicToDraw == 0) {
 				verifyRecreate.push(chunk);
 				process = true;
@@ -813,14 +840,11 @@ function doMap() {
 		}
 
 		if (graphicToDraw) {
-			// console.log(chunk.x * tamanho * tamBlock + moveNow.x);
 			image(
 				graphicToDraw,
-				chunk.x * tamanho * tamBlock + moveNow.x,
-				chunk.y * tamanho * tamBlock + moveNow.y
+				chunk.x * tamanho * tamBlock,
+				chunk.y * tamanho * tamBlock
 			);
-			txt += chunk.x + ", ";
-			qtChunksDrawed++;
 		}
 		if (showExtremes) {
 			stroke(1);
@@ -833,9 +857,7 @@ function doMap() {
 			);
 			noStroke();
 		}
-		delete chunk.moveNow;
 	});
-	// console.log(txt);
 	waitDoMap = false;
 	if (showExtremes) {
 		stroke(1);
@@ -885,7 +907,7 @@ function doMove() {
 	let x = mod(rawX, tamanho);
 	let y = mod(rawY, tamanho);
 	// atribuição
-	document.getElementById("chunk").textContent = _chunk[0] + ", " + _chunk[1] + " | " + x + ", " + y + "\n" + _poss[0] + "," + _poss[1];
+	document.getElementById("chunk").textContent = _chunk[0] + ", " + _chunk[1] + " | " + x + ", " + y;
 }
 // do Map
 function isChunkVisible(chunk, viewLeft, viewRight, viewTop, viewBottom) {
@@ -916,22 +938,11 @@ function isChunkVisible(chunk, viewLeft, viewRight, viewTop, viewBottom) {
 		chunkStartY + chunksize > viewTop
 	);
 }
-function infinitePlanetView(chunk, x, y) {
-	let moveNow = { x: 0, y: 0 };
-	if (chunk.x == tamanhoMaximo[0] - 1 && x == -tamanhoMaximo[0]) { // atras
-		moveNow.x = -tamanhoMaximo[0] * 2 * tamanho * tamBlock;
-		return [true, moveNow];
-	} else if (chunk.x == -tamanhoMaximo[0] && x == tamanhoMaximo[0] - 1) { // atras
-		moveNow.x = tamanhoMaximo[0] * 2 * tamanho * tamBlock;
-		return [true, moveNow];
-	}
-	return [false, moveNow];
-}
 // draw
 function toroide() {
 	// tamanho total do mundo em pixels
-	const worldW = (tamanhoMaximo[0] * 2) * tamanho * tamBlock;
-	const worldH = (tamanhoMaximo[1] * 2) * tamanho * tamBlock;
+	const worldW = tamanhoMaximo[0] * tamanho * tamBlock;
+	const worldH = tamanhoMaximo[1] * tamanho * tamBlock;
 
 	// wrap toroidal em X
 	if (_poss[0] < -worldW / 2) {
@@ -968,7 +979,7 @@ function logicChunks(orderOut) {
 	let qtAdd = Math.ceil(chunksHalfView) - 1;
 
 	let toFind = []; // Lista de coordenadas [x, y] que deveriam existir
-	// console.log(qtAdd);
+
 	// 3. Seleciona os chunks que DEVEM estar na vizinhança (no raio de qtAdd)
 	for (let i = _chunk[0] - qtAdd; i <= _chunk[0] + qtAdd; i++) {
 		for (let j = _chunk[1] - qtAdd; j <= _chunk[1] + qtAdd; j++) {
@@ -976,14 +987,11 @@ function logicChunks(orderOut) {
 		}
 	}
 	// remove os q passa do maximo
-	toFind = toFind.map(chunk => {
-		if (chunk.x == tamanhoMaximo[0] && chunk.y == 0) chunk.x = -tamanhoMaximo[0];
-		else if (chunk.x == -tamanhoMaximo[0] - 1 && chunk.y == 0) chunk.x = tamanhoMaximo[0] - 1;
-		return chunk;
-	});
 	toFind = toFind.filter(chunk =>
-		chunk.x <= tamanhoMaximo[0] - 1 && chunk.x >= -tamanhoMaximo[0] && chunk.y == 0 // somente primeiro level
-	); // && chunk.y <= tamanhoMaximo[1] - 1 && chunk.y >= -tamanhoMaximo[1]
+		chunk.x <= tamanhoMaximo[0] / 2 - 1 && chunk.x >= -tamanhoMaximo[0] / 2
+		&& chunk.y <= tamanhoMaximo[1] / 2 - 1 && chunk.y >= -tamanhoMaximo[1] / 2);
+	// return;
+
 	// 4. Limpeza e Verificação (Culling de Memória)
 	// Filtra o _map para manter apenas os necessários E remove os chunks já existentes da lista 'toFind'
 	let remainAtualizeds = false;
@@ -1014,7 +1022,6 @@ function logicChunks(orderOut) {
 		// Retorna true para manter no _map, false para descartar
 		return true;
 	});
-	// console.log(toFind);
 	// console.log(_map.map(c => c.x + ", " + c.y).join("\n"));
 	// console.log("TOFIND");
 	// console.log(toFind.map(c => c.x + ", " + c.y).join("\n"));
@@ -1028,9 +1035,6 @@ function logicChunks(orderOut) {
 	if (!isGeneratingChunks && _chunksQueue.length > 0) {
 		processChunkGenerationQueue(); // debug NÂO PODE SER ASSYNC
 	}
-	// console.log(">");
-	// console.log(_map[_map.length-1])
-	// console.log(getTime()+_map[_map.length-1].atualized);
 
 	// envia as paradas assincronamente
 	// return;
@@ -1038,8 +1042,6 @@ function logicChunks(orderOut) {
 
 	if (v1 || v2) {
 		const safeMapToSend = _map.filter(c => c.atualized).map(chunk => {
-			// console.log("sending "+chunk.x);
-			// console.log(JSON.stringify(chunk.chunk));
 			return {
 				x: chunk.x,
 				y: chunk.y,
@@ -1049,7 +1051,7 @@ function logicChunks(orderOut) {
 			};
 		});
 		if (v1) {
-			logServer("Ads" + toFind.length + " _map" + _map.length + " > aMoC" + safeMapToSend.length + " " + getTime());
+			logServer("Addeds: " + toFind.length + ". De _map" + _map.length + "; >>> adMp-oC" + safeMapToSend.length + " " + getTime());
 			setTimeout(() => { send({ type: "addMap-orderChunks", id: _id, pos: { x: _poss[0] / tamBlock, y: _poss[1] / tamBlock }, data: safeMapToSend }) }, 0);
 
 			// O timeout 0 (ou 1) libera o browser para o próximo frame
@@ -1066,9 +1068,8 @@ function logicChunks(orderOut) {
 	}
 }
 // buttons
-// promisses = 80
 class Button {
-	constructor(name, x, y, w, h, txt, cor, func, typeFuncDraw) {
+	constructor(name, x, y, w, h, txt, cor, func) {
 		this.name = name;
 		this.cor = cor;
 		this.x = x;
@@ -1077,7 +1078,6 @@ class Button {
 		this.h = h;
 		this.txt = txt;
 		this.func = func;
-		this.typeFuncDraw = typeFuncDraw;
 		this.clicked = false;
 	}
 	click(px, py) {
@@ -1086,34 +1086,17 @@ class Button {
 		if (cl) {
 			this.clicked = !this.clicked;
 			this.func();
-			console.log("click " + this.name);
+			return true;
 		}
-		return cl;
+		return false;
 	}
 	draw() {
-		if (this.typeFuncDraw != null) {
-			switch (this.typeFuncDraw) {
-				case 0:
-					break;
-				case 1:
-					if (selectPutting != this.name) this.clicked = false;
-					break;
-				default:
-					erro("ERRO-003", "typeFuncDraw= " + this.typeFuncDraw);
-
-			}
-		}
-		//
+		fill(this.cor);
+		rect(this.x, this.y, this.w, this.h);
 
 		if (this.clicked) {
-			fill(this.cor);
-			rect(this.x, this.y, this.w, this.h);
-			stroke("#00ff00");
-			// fill("#00ff004d");
-			rect(this.x, this.y, this.w, this.h);
-		} else {
-			noStroke();
-			fill(this.cor);
+			stroke("#00ff00")
+			fill("#00ff0020");
 			rect(this.x, this.y, this.w, this.h);
 		}
 		//
@@ -1123,9 +1106,9 @@ class Button {
 	}
 }
 class AreaButtons extends Button {
-	constructor(name, x, y, w, h, txt, cor, func, funcDraw, btns) {
-		super(name, x, y, w, h, txt, cor, func, funcDraw);
-		this.btns = btns;
+	constructor(name, x, y, w, h, txt, cor, func) {
+		super(name, x, y, w, h, txt, cor, func);
+		this.btns = [];
 	}
 }
 var geral = new AreaButtons("geral",
@@ -1133,7 +1116,7 @@ var geral = new AreaButtons("geral",
 	, 0, 0,
 	"", "#ff0000", () => {
 		console.log("geral");
-	}, null, []
+	}
 );
 var localAreaBtns = [], voltar;
 function defineButtons() {
@@ -1143,7 +1126,7 @@ function defineButtons() {
 	rect(pad, height * 3 / 4 + pad, width - pad * 2, height * 1 / 4 - pad * 2);
 	// definitions
 	let l = 0, c = 0;
-	let tam = 30;
+	let tam = 40;
 	let gap = 10;
 	// adm
 	geral.btns.push(new AreaButtons("adm",
@@ -1151,48 +1134,27 @@ function defineButtons() {
 		, tam, tam,
 		"ADM", "#aa0000", () => {
 			localAreaBtns = [0];
-		}, null,
-		[
-			new AreaButtons("put",
-				pad * 2 + tam * c + gap * c, pad * 2 + height * 3 / 4 + tam * l + gap * l
-				, tam, tam,
-				"PUT", "#85aa00ff", () => {
-					localAreaBtns.push(0);
-				}, null,
-				[
-					new Button("water",
-						pad * 2 + tam * c + gap * c, pad * 2 + height * 3 / 4 + tam * l + gap * l
-						, tam, tam,
-						"WATER", "#1b50ffff", () => {
-							selectPutting = (selectPutting == "water") ? "" : "water";
-						}, 1
-					)
-					, new Button("stone",
-						pad * 2 + tam * (c + 1) + gap * (c + 1), pad * 2 + height * 3 / 4 + tam * l + gap * l
-						, tam, tam,
-						"STONE", getColor("stone"), () => {
-							selectPutting = (selectPutting == "stone") ? "" : "stone";
-						}, 1
-					)
-					, new Button("space",
-						pad * 2 + tam * (c + 0) + gap * (c + 0), pad * 2 + height * 3 / 4 + tam * (l + 1) + gap * (l + 1)
-						, tam, tam,
-						"SPACE", getColor("space"), () => {
-							selectPutting = (selectPutting == "space") ? "" : "space";
-						}, 1
-					)
-				]
-			)
-		]
+		}
 	));
-	// l = 0; c = 0;
-
-	// // adm-put
-	// l = 0; c = 0;
-	// geral.btns[geral.btns.length - 1].btns[0].btns.push(
-	// 	;
-	// geral.btns[geral.btns.length - 1].btns[0].btns.push(
-	// );
+	l = 0; c = 0;
+	geral.btns[geral.btns.length - 1].btns.push(
+		new AreaButtons("put",
+			pad * 2 + tam * c + gap * c, pad * 2 + height * 3 / 4 + tam * l + gap * l
+			, tam, tam,
+			"PUT", "#85aa00ff", () => {
+				localAreaBtns.push(0);
+			}
+		));
+	// adm-put
+	l = 0; c = 0;
+	geral.btns[geral.btns.length - 1].btns[0].btns.push(
+		new Button("water",
+			pad * 2 + tam * c + gap * c, pad * 2 + height * 3 / 4 + tam * l + gap * l
+			, tam, tam,
+			"WATER", "#1b50ffff", () => {
+				selectPutting = (selectPutting == "water") ? "" : "water";
+			}
+		));
 
 
 	//voltar
@@ -1218,8 +1180,6 @@ function buttons() {
 	// voltar
 	voltar.draw();
 	voltar.clicked = false;
-	// console.log(selectPutting);
-	local.clicked = false;
 	//
 	for (let b of local.btns) {
 		b.draw();
@@ -1253,8 +1213,8 @@ function click() {
 	// Tela
 	{
 		if (selectPutting != "") {
-			let chunk = _map.find(c => c.x == _chunk[0]);
-			// console.log(chunk.renderHash);
+			let chunk = _map.find(c => c.x == _chunk[0] && c.y == _chunk[1]);
+			console.log(chunk.renderHash);
 			if (chunk != undefined) {
 				// Função utilitária para facilitar a vida
 				const mod = (n, m) => ((n % m) + m) % m;
@@ -1270,26 +1230,22 @@ function click() {
 				// Agora o acesso ao array nunca será negativo
 				let sendIt = {
 					keyChunk: { x: chunk.x, y: chunk.y },
-					localChunk: { x: x },
-					localBlock: 1, // 0: unshift; 1:replace in block unshift
+					localChunk: { x: x, y: y },
+					localBlock: 0,
 					what: {
 						height: stepDefaultMetters * coeExpantionToMetters,
-						depth: (rawY) * stepDefaultMetters * coeExpantionToMetters, // addIt : era o 'metters'
+						depth: metters,
 						thing: selectPutting,
 						hardness: 1,
 						color: getColor(selectPutting)
 					}
 				};
-				// console.log(sendIt);
-				// console.log("put in: "+(rawY-20)*stepDefaultMetters * coeExpantionToMetters)
 				setTimeout(() => {
 					send({
 						type: "addInMap", id: _id,
 						data: sendIt
 					})
 				}, 0);
-				// simula recebimento
-				// simulateMergeChunks(sendIt);
 				// // ordena
 				// let antes = chunk.chunk[x][y];
 				// let novo = [];
@@ -1309,6 +1265,7 @@ function click() {
 				// chunk.chunk[x][y] = novo;
 				//
 			}
+
 			// _chunksToRecreateQueue.push(chunk);
 			// chunk.atualized = false;
 			// chunk.renderHash = calculateRenderHash(chunk.chunk);
@@ -1317,7 +1274,6 @@ function click() {
 			// 	setTimeout(processGraphicsQueue, 0, metters / (stepDefaultMetters * coeExpantionToMetters));
 			// }
 			// logicChunks(true);
-
 		}
 	}
 }

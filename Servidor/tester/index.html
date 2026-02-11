@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Savior</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+	<link rel="stylesheet" href="geral.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<!--sem zoom-->
+</head>
+
+<body style="background: #464646">
+	<div class="geral">
+		<h1 id="id">Cliente</h1>
+		<h1 id="erro" style="display: none; color: red;"></h1>
+		<div id="chunk"></div>
+		<!-- <script src="./Auxs/auxiliar.js" defer></script> -->
+		<script src="wtfll.js"></script>
+		<table>
+			<tr>
+				<th>seed</th>
+				<!-- <th>tamBlock</th> -->
+				<th>zoom</th>
+				<th>qtCh.Dr.</th>
+				<th>fps</th>
+				<th>touches</th>
+				<th>metters</th>
+				<!-- <th>queue</th> -->
+				<!-- <th>th1</th> -->
+				<!-- <th>th2</th> -->
+				<!-- <th>d1</th> -->
+				<!-- <th>d2</th> -->
+			</tr>
+			<tr>
+				<td id="seed"></td>
+				<!-- <td id="doubleTouch"></td> -->
+				<td id="zoom"></td>
+				<td id="qtCh.Dr."></td>
+				<td id="fps"></td>
+				<td id="touches">---</td>
+				<td id="metters">---</td>
+				<!-- <td id="queue">---</td> -->
+				<!-- <td id="th1">---</td> -->
+				<!-- <td id="th2">---</td> -->
+				<!-- <td id="d1">---</td> -->
+				<!-- <td id="d2">---</td> -->
+			</tr>
+		</table>
+		<div style="display: flex; flex-direction: row;">
+			<!-- 0 -->
+			<div>
+				<pre id="log"></pre>
+				<pre id="chunk"></pre>
+			</div>
+			<div>
+				<pre id="logEsp0"></pre>
+				<pre id="logEsp1"></pre>
+				<pre id="logEsp2"></pre>
+			</div>
+			<div>
+				<pre id="server"></pre>
+			</div>
+		</div>
+		<script>
+			const log = (msg, add) => {
+				// return;
+				if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
+				else document.getElementById("log").textContent += JSON.stringify(msg) + "\n";
+			};
+			const logEsp = (msg, add, local) => {
+				// return;
+				if (!add) document.getElementById("logEsp" + local).textContent = JSON.stringify(msg) + "\n";
+				else document.getElementById("logEsp" + local).textContent += JSON.stringify(msg) + "\n";
+			};
+			//
+			var logsServer = [], tetoLogsServer = 10;
+			const logServer = (msg) => {
+				// return;
+				add = true;
+				// if (!add) document.getElementById("log").textContent = JSON.stringify(msg) + "\n";
+				logsServer.push(JSON.stringify(msg) + "\n");
+				if (logsServer.length > tetoLogsServer) logsServer.shift();
+				document.getElementById("server").textContent = "";
+				logsServer.forEach(e => document.getElementById("server").textContent += e);
+			};
+		</script>
+		<div id="localCanvas"></div>
+		<div style="display: flex; flex-direction: row; gap: 10px;">
+			<button class="interact" id="zoomIn">⬛</button>
+			<button class="interact" id="zoomOut">▪️</button>
+			<button class="interact" id="upLayer">▲</button>
+			<button class="interact" id="downLayer">▼</button>
+		</div>
+	</div>
+</body>
+
+</html>

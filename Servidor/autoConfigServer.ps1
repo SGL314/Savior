@@ -2,7 +2,7 @@
 # === Configuracao Automatica de Portas para Acesso Externo ao WSL ===
 # ====================================================================
 
-$PORTS = @(1234, 3000)
+$PORTS = @(1234, 3000,3141)
 
 # Obtem o IP INTERNO do WSL (172.x.x.x)
 $WSL_IP_ALL = (wsl.exe -d Ubuntu -u root hostname -I 2>$null | Select-Object -First 1).Trim()

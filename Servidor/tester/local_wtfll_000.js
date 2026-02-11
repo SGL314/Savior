@@ -1,5 +1,5 @@
 import express from "express";
-import { pri, getId, getDate, getTime } from "../Auxs/auxiliar.js";
+import { pri, getId, getDate, getTime } from "../../Auxs/auxiliar.js";
 import path from "path";
 import { Worker } from "worker_threads";
 import os from "os";
@@ -7,521 +7,24 @@ import { exec } from "child_process";
 import { WebSocketServer } from "ws";
 import fs from "fs";
 
-const raw = fs.readFileSync("./data/configs/definitions_clientToServer.json", "utf-8");
+const raw = fs.readFileSync("../data/configs/definitions_clientToServer.json", "utf-8");
 const json = JSON.parse(raw);
 
 const stepDefaultMetters = json.stepDefaultMetters;
 const coeExpantionToMetters = json.coeExpantionToMetters;
 
-const app = express();
-
-const __dirname = "/mnt/c/Users/samug/OneDrive/Documentos/Scripts/Scriptshtml/Savior/"
-const portaCliente = 1234;
-const portaServer = 3141;
-const portaWebSocket = 3000;
-const ipGeral = "192.168.0.11"; // 192.168.0.15 10.36.65.102
-
-// Função para obter o IP interno do WSL (172.x.x.x)
-function getWslIp() {
-	const interfaces = os.networkInterfaces();
-	for (const name in interfaces) {
-		for (const net of interfaces[name]) {
-			if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('172.17.')) {
-				return net.address;
-			}
-		}
-	}
-	return 'localhost';
-}
-
-const wslIp = getWslIp();
-// Servir o cliente
-app.use(express.static(path.join(__dirname, "Cliente")));
-
-// Rotas HTTP Cliente
-app.get("/api/msg", (req, res) => {
-	res.json({ msg: "Servidor respondeu!" });
-});
-app.get("/checkConnection", (req, res) => {
-	res.json({ msg: "Connected!" });
-});
-app.get("/map", (req, res) => {
-	res.json({ msg: "Mapa salvo" });
-});
-
-// app.get("/checkConnection", (req, res) => {
-// 	res.json({ msg: "Connected!" });
-// });
-
-// app.get("/map", (req, res) => {
-// 	res.json({ msg: "Mapa salvo" });
-// });
-
-// ESCUTA NO ENDEREÇO 0.0.0.0 (Todas as interfaces)
-app.listen(portaCliente, '0.0.0.0', () => {
-	console.log(`\n======================================================`);
-	console.log(`✅ Servidor Express rodando no WSL (IP Interno): ${wslIp}:${portaCliente}`);
-	console.log(`🌐 ACESSO EXTERNO (Celular/LAN):`);
-	console.log(`\n📱 ACESSE DO SEU CELULAR:`);
-	console.log(`   http://${ipGeral}:${portaCliente}/`);
-	console.log(`\n🔌 WebSocket: ws://${ipGeral}:${portaWebSocket}`);
-});
-
-
 // game variables
 var _map = []; // mapa do jogo
 var _seed = 2906;
-// formSeed(); // semente inicial do jogo
-/* SEMENTES LEGAIS
-2906: teste de waterfall
-6800: territorio grande com lagos
-*/
 
-// game
-
-const wss = new WebSocketServer({ port: portaWebSocket });
-
-console.log("Servidor WebSocket rodando na porta " + portaWebSocket);
-
-// Lista de clientes conectados
-class Client {
-	constructor(ws) {
-		this.id = getId();
-		this.pos = [0, 0];
-		this.ws = ws;
-	}
-}
-
-var processes = [];
-class Processor {
-	constructor(ws) {
-		this.id = getId();
-		this.ws = ws;
-	}
-	add(type) {
-		let idTime = getTime();
-		text("Processo adicionado:    " + idTime + " " + type, "g");
-		processes.push({ type: type, idTime: idTime });
-		return idTime;
-	}
-	getType(idTime) {
-		try {
-			return processes.filter(e => e.idTime == idTime)[0].type;
-		} catch (e) {
-			return "undefined";
-		}
-	}
-	remove(idTime) {
-		text("Processo removido:      " + idTime + " " + this.getType(idTime), "r");
-		processes = processes.filter(e => e.idTime != idTime);
-	}
-}
-
-var processor = new Processor();
-let clients = [];
-// SERVIDOR
-const appServer = express();
-// Servir o servidor
-appServer.use(express.static(path.join(__dirname, "Servidor/logger")));
-// Rotas HTTP Servidor
-appServer.get("/getAll", (req, res) => {
-	res.json({
-		tamanho: _map.length, clientes: clients, seed: _seed,
-		things: {
-			water: countObject("water", 0, _map),
-			sand: countObject("sand", 0, _map),
-			stone: countObject("stone", 0, _map),
-			space: countObject("space", 0, _map)
-		}
-	});
-});
-appServer.get("/newMap", (req, res) => {
-	_map = [];
-	try {
-		formSeed();
-		send(clients[0].ws, { type: "seed", seed: _seed });
-		send(clients[0].ws, { type: "newMap", data: ["newMap"] });
-	} catch (e) {
-		console.log("Nenhum cliente conectado para enviar o newMap\n" + clients.length);
-	}
-	res.json({ tamanho: _map.length, clientes: clients });
-});
-// listenner
-appServer.listen(portaServer, '0.0.0.0', () => {
-	console.log(`\n======================================================`);
-	console.log(`✅ Admin Servidor Express rodando: http://${ipGeral}:${portaServer}`);
-	// console.log(`🌐 ACESSO EXTERNO (Celular/LAN):`);
-	// console.log(`\n📱 ACESSE DO SEU CELULAR:`);
-	// console.log(`   http://${ipGeral}:${portaCliente}/`);
-	// console.log(`\n🔌 WebSocket: ws://${ipGeral}:${portaWebSocket}`);
-});
-// end
-
-wss.on("connection", (ws) => {
-	let client = new Client(ws);
-	clients.push(client);
-	console.log("Cliente conectado. Total:", clients.length);
-	send(ws, {
-		type: "configs",
-		id: client.id,
-		game: {
-			stepDefaultMetters: stepDefaultMetters,
-			coeExpantionToMetters: coeExpantionToMetters
-		}
-	});
-	send(ws, { type: "seed", seed: _seed });
-
-	if (_map.length == 0){
-		// console.log("Enviando ordem newMap para " + client.id);
-		send(ws, { type: "newMap", data: ["newMap"] });
-	}
-	else{
-		// console.log("Enviando initialMap para " + client.id);
-		send(ws, { type: "initialMap", data: _map });
-	}
-
-	// ⚠️ ASYNC adicionado para processamento assíncrono
-	ws.on("message", async (msg) => {
-		const data = JSON.parse(msg);
-		// console.log(data);
-		let fracId = data.id.split(" ")[0];
-		let withoutMap = ["formSeed"];
-		withoutMap.filter(e => e != data.type).forEach(e => console.log("Recebido de " + fracId + " : " + data.type + "" + data.data.length + " " + getTime()));
-		withoutMap.filter(e => e == data.type).forEach(e => console.log("Recebido de " + fracId + " : " + data.type + "" + " " + getTime()));
-
-		let sendGeral = data;
-
-		// Libera o event loop imediatamente para processar próximas mensagens
-		setImmediate(async () => {
-			await processMessage(ws, data, client, fracId, sendGeral);
-		});
-	});
-
-	// Quando o cliente desconectar
-	ws.on("close", () => {
-		clients = clients.filter((c) => c.ws !== ws);
-		console.log("Cliente saiu. Total:", clients.length);
-	});
-});
-
-// ============================================
-// FUNÇÃO ASSÍNCRONA PARA PROCESSAR MENSAGENS
-// ============================================
-
-async function processMessage(ws, data, client, fracId, sendGeral) {
-	var worker;
-	let variMin = 10;
-	let idTime = processor.add(data.type);
-
-	switch (data.type) {
-		case "map":
-			_map = data.data;
-			broadcast(sendGeral);
-			send(ws, { type: "seed", seed: _seed });
-			break;
-		case "orderChunks":
-			for (let c of clients) {
-				if (c.id == data.id) {
-					c.pos = data.pos;
-				}
-			}
-
-			try {
-				// Aguarda o worker de forma assíncrona	
-				const result = await runWorker({
-					type: "orderChunks",
-					pos: data.pos,
-					map: data.data,
-				});
-
-				console.log("Enviando " + result.length + " chunks ordenados para ", fracId, ",", getTime());
-				send(ws, { type: "orderChunks", data: result });
-			} catch (err) {
-				erro("Erro no Worker Thread:", err);
-			}
-			break;
-
-		case "map-orderChunks":
-			_map = data.data;
-
-			for (let c of clients) {
-				if (c.id == data.id) {
-					c.pos = data.pos;
-				}
-			}
-
-			// Broadcast do mapa para outros clientes
-			sendGeral["type"] = "map";
-			broadcastExceptId(sendGeral, data.id);
-
-			try {
-				// Aguarda o worker de forma assíncrona
-				const result = await runWorker({
-					type: "orderChunks",
-					pos: data.pos,
-					map: data.data,
-				});
-
-				// Verifica se ainda há apenas 1 processo deste tipo
-				if (processes.filter(e => e.type == "map-orderChunks").length > 10) {
-					console.log("Ignorando resultado - múltiplos processos ativos");
-					processor.remove(idTime);
-					return;
-				}
-
-				console.log("Enviando " + result.length + " chunks do tipo {" + Object.keys(result[0]) + "} ordenados para ", fracId, ",", getTime());
-				send(ws, { type: "orderChunks", data: result });
-				processor.remove(idTime);
-			} catch (err) {
-				erro("Erro no Worker Thread:", err);
-				processor.remove(idTime);
-			}
-			break;
-		case "addMap-orderChunks":
-			// merge
-			data.data.filter(c => !_map.find(m => m.x === c.x && m.y === c.y)).forEach(c => {
-				_map.push(c);
-			})
-			_map.map(m => {
-				m = data.data.find(c => c.x === m.x && c.y === m.y);
-			});
-			// console.log("after chunks c/ graphics: " + _map.filter(c => c.graphics).length);
-			//
-			for (let c of clients) {
-				if (c.id == data.id) {
-					c.pos = data.pos;
-				}
-			}
-
-			// Broadcast do mapa para outros clientes
-			sendGeral["type"] = "map";
-			broadcastExceptId(sendGeral, data.id);
-
-			try {
-				// Aguarda o worker de forma assíncrona
-				const result = await runWorker({
-					type: "orderChunks",
-					pos: data.pos,
-					map: data.data,
-				});
-
-				// Verifica se ainda há apenas 1 processo deste tipo
-				if (processes.filter(e => e.type == "map-orderChunks").length > 10) {
-					console.log("Ignorando resultado - múltiplos processos ativos");
-					processor.remove(idTime);
-					return;
-				}
-				try {
-					console.log("Enviando " + result.length + " chunks do tipo {" + Object.keys(result[0]) + "} ordenados para ", fracId, ",", getTime());
-
-				} catch (e) {
-					erro("Result: " + result);
-				}
-				send(ws, { type: "orderChunks", data: result });
-				processor.remove(idTime);
-			} catch (err) {
-				erro("Erro no Worker Thread:", err);
-				processor.remove(idTime);
-			}
-			break;
-
-		case "formSeed":
-			if (_map.length != 0) formSeed();
-			console.log("Seed formada: " + _seed);
-			broadcast({ type: "seed", seed: _seed });
-			break;
-		case "newMap":
-			_map = data.data;
-			sendGeral["type"] = "map";
-			broadcast(sendGeral);
-			break;
-		case "addInMap":
-			// keyChunk: { x: chunk.x, y: chunk.y }, 
-			// 		localChunk: { x: x, y: y },
-			// 		localBlock: 0,
-			// 		what: {
-			// 			height: stepDefaultMetters * coeExpantionToMetters,
-			// 			depth: metters,
-			// 			thing: selectPutting,
-			// 			hardness: 1,
-			// 			color: getColor(selectPutting)
-			// 		}
-			let chunkAtt = null;
-			_map.map(c => {
-				if (c.x == data.data.keyChunk.x && c.y == data.data.keyChunk.y) {
-					// Adiciona o novo bloco na posição correta dentro da chunk
-					chunkAtt = c;
-					switch (data.data.localBlock) {
-						case 0:
-							c.chunk[data.data.localChunk.x].unshift(data.data.what);
-							break;
-						case 1:
-							seeIfReplaceInBlocks(c, data, variMin);
-							break;
-						default:
-							erro("Tipo de localBlock desconhecido: " + data.data.localBlock);
-					}
-				}
-			});
-			// console.log("Received (addInMap): "+data.data);
-			// ordena o block do chunk
-			if (data.data.localChunk.x < 0) {
-				erro("Chunk com posição negativa não suportada --addInMap:" + JSON.stringify(data.data.localChunk));
-			}
-			let antes = chunkAtt.chunk[data.data.localChunk.x];
-			if (antes == null) {
-				erro("Chunk não encontrado para atualização --addInMap:" + JSON.stringify(chunkAtt.atualized) + "\n" + JSON.stringify(chunkAtt.x) + "\n" + JSON.stringify(chunkAtt.y) + "\n" + JSON.stringify(chunkAtt.renderHash));
-			}
-			let novo = [];
-			let minDepth = 31415926535;
-			while (antes.length > 0) {
-				let rem = null;
-				minDepth = 31415926535;
-				for (let b of antes) {
-					if (b.depth < minDepth) {
-						minDepth = b.depth;
-						rem = b;
-					}
-				}
-				novo.push(rem);
-				antes.splice(antes.indexOf(rem), 1);
-			}
-			chunkAtt.chunk[data.data.localChunk.x] = novo;
-			// envia atualização para todos
-			broadcast({
-				type: "attChunks",
-				data: [{
-					keyChunk: { x: chunkAtt.x, y: chunkAtt.y },
-					chunk: chunkAtt
-				}]
-			});
-			processor.remove(idTime);
-			break;
-		default:
-			console.log("server.js - Tipo de dado desconhecido: " + data.type);
-	}
-}
-function seeIfReplaceInBlocks(chunk, data, vMn) {
-	// .chunk[data.data.localChunk.x].unshift(data.data.what);
-	let variMin = vMn;
-	let block = data.data.what;
-	let init = Math.round((block.depth) * variMin) / variMin;
-	let end = Math.round((init + block.height) * variMin) / variMin;
-	//
-	// console.log(chunk.chunk[data.data.localChunk.x]);
-	// não tá removendo do lado de algo q tá partido
-	let justPut = true;
-	for (let b of chunk.chunk[data.data.localChunk.x]) {
-		if (b == null) continue;
-		// console.log(init, end, b.depth, b.height);
-		if (b.depth >= end && init >= b.depth + b.height) {
-			justPut &= true;
-		} else {
-			if (end >= b.depth && end <= b.depth + b.height) { // remove abaixo
-				// console.log("remove abaixo");
-				justPut &= false;
-				let rem = end - b.depth;
-				// console.log(rem);
-				rem = Math.min(rem, block.height);
-				if (rem == block.height) {
-					let nBlock = {}; // bloco de cima
-					for (let k in b) {
-						nBlock[k] = b[k];
-					}
-					nBlock.depth = b.depth;
-					nBlock.height = init - b.depth;
-					chunk.chunk[data.data.localChunk.x].unshift(nBlock);
-					let h = b.height, d = b.depth;
-					b.depth = end;
-					b.height = h + d - end;
-				} else {
-					b.depth += rem;
-					b.height -= rem;
-				}
-				// console.log(b.depth,b.height);
-			}
-			if (b.depth + b.height >= init && init >= b.depth) { // remove acima
-				justPut &= false;
-				let rem = b.depth + b.height - init;
-				rem = Math.min(rem, block.height);
-				if (rem == block.height) {
-
-				} else {
-					b.height -= rem;
-
-				}
-				// console.log(rem);
-			}
-		}
-	}
-	if (block.thing != "space") {
-		if (justPut) {
-			chunk.chunk[data.data.localChunk.x].unshift(block);
-		} else {
-			chunk.chunk[data.data.localChunk.x].unshift(block);
-		}
-	}
-	for (let b of chunk.chunk[data.data.localChunk.x]) {
-		b.depth = Math.round(b.depth * variMin) / variMin;
-		b.height = Math.round(b.height * variMin) / variMin;
-	}
-	freeZeroHeights(chunk, vMn);
-	console.log(chunk.chunk[data.data.localChunk.x]);
-}
-function freeZeroHeights(chunk, vMn) {
-	chunk.chunk.map(blocks => {
-		let nBlocks = []
-		for (let ind = 0; ind < blocks.length; ind++) {
-			if (blocks[ind] == null) continue;
-			blocks[ind].height = Math.round(blocks[ind].height * vMn) / vMn;
-			if (blocks[ind].height == 0) blocks.splice(ind, 1);
-			nBlocks.push(blocks[ind]);
-		}
-		blocks = nBlocks;
-	});
-}
-
-// ============================================
-// FUNÇÃO HELPER PARA EXECUTAR WORKER COM PROMISE
-// ============================================
-
-function runWorker(workerData) {
-	return new Promise((resolve, reject) => {
-		const worker = new Worker("../Auxs/worker.js", { workerData });
-
-		worker.on("message", (result) => {
-			resolve(result);
-			worker.terminate(); // Limpa o worker após uso
-		});
-
-		worker.on("error", (err) => {
-			reject(err);
-			worker.terminate();
-		});
-
-		worker.on("exit", (code) => {
-			if (code !== 0 && code !== 1) {
-				reject(new Error(`Worker parou com código ${code}`));
-			}
-		});
-	});
-}
-setTimeout(() => { main(); console.log("Iniciando main()"); }, 0.5 * 1000);
-
-// game
-function formSeed() {
-	_seed = Math.floor(Math.random() * 10000);
-}
-// WATERFALL
-
-
+setTimeout(() => { main(); console.log("Iniciando main()"); }, 0);
+_map = JSON.parse(fs.readFileSync("./_map.json", "utf-8"));
 var processingInMain = {
 	"waterfall": false,
-	"gradefall": false,
+	"gradefall": false
 };
 function main() {
 	let initMain = new Date();
-	let minTime = 1000; // ms
 	// return;
 	// if (!processingInMain["waterfall"]) {
 	// 	processingInMain["waterfall"] = true;
@@ -584,7 +87,7 @@ function main() {
 	// 			// console.log(k + txt);
 
 	// 		}
-	// 		// console.log("wtfll: " + (new Date() - init) + "ms : " + countObject("water", 0, _map));
+	// 		console.log("wtfll: " + (new Date() - init) + "ms : " + countObject("water", 0, _map));
 	// 		processingInMain["waterfall"] = false;
 	// 	});
 	// }
@@ -595,7 +98,7 @@ function main() {
 			// try { console.log("in: " + JSON.stringify(_map.filter(c => c.x == 0)[0].chunk[21])); } catch (e) { }
 			let ret = await gradefall();
 			if (ret.length > 0) {
-				// console.log("---gradefall--- "+JSON.stringify(_map.filter(c=>c.x==0 && c.y==0)[0].chunk[23][23]));
+				// console.log("---waterfall--- "+JSON.stringify(_map.filter(c=>c.x==0 && c.y==0)[0].chunk[23][23]));
 				let chunks = _map.filter(c => {
 					for (let r of ret) {
 						if (c.x == r.key.x) return true;
@@ -623,11 +126,8 @@ function main() {
 					let chunk = c.chunk;
 					for (let blk of chunk.chunk) {
 						if (!JSON.stringify(blk).includes("water")) continue;
-						let nBlk = [];
 						for (let i = 0; i < blk.length; i++) {
 							let b = blk[i];
-							if (b == null) continue;
-							nBlk.push(b);
 							if (b.thing == "water") {
 								t++;
 								b.height = Math.round(b.height * variMin) / variMin;
@@ -636,13 +136,12 @@ function main() {
 								vt += b.height;
 								txt += t + "(" + chunk.chunk.indexOf(blk) + "): " + JSON.stringify(b) + " - ";
 								txt += " " + JSON.stringify(blk[i + 1]) + "\n";
+							} else if (i > 0 && blk[i - 1].thing == "water") {
 							}
-							//  else if (i > 0 && blk[i - 1].thing == "water") { // verificar se null
-							// }
 
 
 						}
-						blk = nBlk;
+
 					}
 				});
 				txt += "\n---: " + JSON.stringify(data[0].chunk.chunk[7]) + "\n";
@@ -653,116 +152,141 @@ function main() {
 				// console.log(k + txt);
 
 			}
-			// console.log("wtfll: " + (new Date() - init) + "ms : " + countObject("water", 0, _map));
+			console.log("gdfll: " + (new Date() - init) + "ms : "); //  + countObject("water", 0, _map)
 			processingInMain["gradefall"] = false;
 		});
 	}
 	let dif = new Date() - initMain;
-	setTimeout(main, (minTime - dif < 0) ? 0 : minTime - dif);
+	setTimeout(main, (100 - dif < 0) ? 0 : 100 - dif);
 }
-var repeatWaterfall = 20;
-const tamanho = 30;
-// GRADEFALL
+var repeatWaterfall = 1;
+// GARDEFALL
 // 000nota
 //
 async function gradefall() {
-	const eps = 0.1;
+	if (repeatWaterfall <= 0) return [];
+	// ordenar os  chunks antes de gradefall
+	let changes = [];
+	// let mapCopied = _map.copyWithin(_map.length,0);
+	let hashesKeyChunks = getHashesKeyChunks();
+	let chaveChunk = "0,0";
+	//
+	const canAbsrvIn = 3;
+	const absrv = (a) => a.hd < canAbsrvIn;
+	let init = new Date();
+	let configsChunks = await getConfigs();
+	console.log("configsChunks: " + (new Date() - init) + "ms");
+	_map.map(chunk => {
 
-	const canAbsrvIn = 2;
-	const absrv = (a) => a.hardness < canAbsrvIn;
+		let chA = hashesKeyChunks.get((chunk.x - 1) + "," + chunk.y);
+		let chB = hashesKeyChunks.get((chunk.x + 1) + "," + chunk.y);
+		// console.log(chA.x + "," +chunk.x+","+ chB.x);
+		let retChunk = configsChunks.find(c => c.x == chunk.x && c.y == chunk.y);
+		let variMin = 10;
+		let change = false;
+		let tam = chunk.chunk.length;
+		for (var i = 0; i < chunk.chunk.length; i++) {
+			let grades = retChunk.gradess[i];
+			let blocks = chunk.chunk[i];
+			let nGrades = [];
+			// console.log(i, grades);
+			let show = i == 12 || i == 13 || i == 14;
+			for (let j = 0; j < grades.length; j++) {
+				let g = grades[j];
+				let pos_g = (j == grades.length - 1) ? null : grades[j + 1];
+				if (pos_g != null) {
+					if (g.t == "water") {
+						if (pos_g.t == "space") {
+							if (pos_g.h >= move) { // cabe completamente
+								console.log("tot");
+								g.d += move;
+								pos_g.d += move;
+								pos_g.h -= move;
+							}
+							else if (pos_g.h > 0) { // cabe completamente
+								console.log("parc");
+								g.d += pos_g.h;
+								pos_g.d += pos_g.h;
+								pos_g.h -= pos_g.h;
+							}
+						}//encontrou um chão
+						else {
+							console.log("splash");
+							//getblocks
+							let adjs = []; // {i: i}: blocksInterfer
+							if (i > 0) {
+								adjs.push({ i: i - 1 });
+							}
+							else {
+								adjs.push({ i: i - 1 }); // next chunks  
+							}
+							if (i < tam - 1) {
+								adjs.push({ i: i + 1 });
+							}
+							else {
+								adjs.push({ i: i + 1 }); // next chunks 
+							}
 
-	const changes = [];
+							// getting
+							let blocksInterfer = []
+							for (let ad of adjs) {
+								let ch = null;
+								if (ad.i < 0) ch = chA;
+								else if (ad.i >= tam) ch = chB
+								else ch = chunk;
+								if (ch.chunk[(ad.i + tam) % tam].length > 0) {
+									blocksInterfer.push({
+										i: ad.i,
+										bks: configsChunks.find(c => c.x == ch.x && c.y == ch.y).gradess[(ad.i + tam) % tam]
+									});
+								}
+							}
+							blocksInterfer.splice(1, 0, { i: i, bks: grades });
+							
 
-	// ===================================================
-	// 1. CHUNK → MATRIZ GLOBAL
-	// ===================================================
-	const mat = new Map(); // "x,y" => 0,1,2,3
-	const waterCells = [];
-
-	for (const chunk of _map) {
-		const baseX = chunk.x * tamanho;
-
-		for (let cx = 0; cx < chunk.chunk.length; cx++) {
-			const x = baseX + cx;
-
-			for (const blk of chunk.chunk[cx]) {
-				const y0 = Math.round(blk.depth);
-				const y1 = Math.round(blk.depth + blk.height);
-
-				let id = 0;
-				if (blk.thing === "water") id = 1;
-				else if (absrv(blk)) id = 2;
-				else id = 3;
-
-				for (let y = y0; y < y1; y++) {
-					mat.set(`${x},${y}`, id);
-					if (id === 1) waterCells.push({ x, y, blk, chunk });
+						}
+					}
+				}
+				nGrades[j] = g;
+				if (pos_g != null) {
+					nGrades[j + 1] = pos_g;
 				}
 			}
-		}
-	}
-
-	// snapshot
-	const next = new Map(mat);
-
-	// ===================================================
-	// 2. SIMULAÇÃO (SÓ MATRIZ)
-	// ===================================================
-	for (const w of waterCells) {
-		const { x, y } = w;
-
-		// tentar cair
-		const below = `${x},${y + 1}`;
-		if (!mat.has(below)) {
-			next.delete(`${x},${y}`);
-			next.set(below, 1);
-			continue;
-		}
-
-		// tentar absorver
-		if (mat.get(below) === 2) {
-			next.delete(`${x},${y}`);
-			continue;
-		}
-
-		// espalhar
-		const dirs = [-1, 1];
-		for (const dx of dirs) {
-			const side = `${x + dx},${y}`;
-			const sideBelow = `${x + dx},${y + 1}`;
-
-			if (!mat.has(side) && !mat.has(sideBelow)) {
-				next.delete(`${x},${y}`);
-				next.set(side, 1);
-				break;
+			grades = nGrades;
+			// console.log("Final");
+			// encoding
+			let ind = -1;
+			for (let b of blocks) {
+				ind++;
+				while (grades[ind].t == "space") { ind++; }
+				b.height = grades[ind].h;
+				b.depth = grades[ind].d;
+				// console.log(b.thing,b.height,b.depth);
 			}
+			chunk.chunk[i] = blocks;
 		}
-	}
-
-	// ===================================================
-	// 3. MATRIZ → CHUNK (APLICAÇÃO REAL)
-	// ===================================================
-	for (const w of waterCells) {
-		const key = `${w.x},${w.y}`;
-
-		if (!next.has(key)) {
-			w.blk.depth += 1 - eps;
-			changes.push(w.chunk);
+		if (change) {
+			changes.push({
+				key: { x: chunk.x, y: chunk.y },
+			});
 		}
-	}
-
-	return [...new Set(changes)].map(c => ({ key: { x: c.x, y: c.y } }));
-}
-
-
-function getConfigs() {
-	let retorno = [];
-	_map.map(chunk => {
-		retorno.push(_getConfigs(chunk));
 	});
-	return retorno;
+	//
+	// console.log("\x1b[31m returning");
+	repeatWaterfall--;
+	return changes;
+
 }
-function _getConfigs(chunk) {
+async function getConfigs() {
+	let promises = [];
+	_map.map(chunk => {
+		promises.push(_getConfigs(chunk));
+	});
+	return await Promise.all(promises);
+}
+async function _getConfigs(chunk) {
+	const canAbsrvIn = 3;
+	const absrv = (a) => a.hd < canAbsrvIn;
 	let variMin = 10;
 	let retChunk = {
 		x: chunk.x, y: chunk.y,
@@ -775,7 +299,7 @@ function _getConfigs(chunk) {
 		//
 		let nGrades = [];
 		let blocks = chunk.chunk[i];
-		let grades = gradeIt(blocks, false);
+		let grades = gradeIt(blocks);
 		grades.map(g => {
 			nGrades.push(null);
 		});
@@ -786,7 +310,26 @@ function _getConfigs(chunk) {
 		// 1 : water
 		// 2 : wall
 		// 3 : absorve
-		let matrizQua = matrizeIt(blocksInterfer);
+		let matrizQua = [];
+		for (let bks of blocksInterfer) {
+			let pre = []
+			let level = 0;
+			for (let indB = 0; indB < bks.bks.length; indB++) {
+				// console.log(bks.bks[indB],level);
+				if (bks.bks[indB].d <= level
+					&& bks.bks[indB].d + bks.bks[indB].h > level) {
+					if (bks.bks[indB].t == "space") pre.push(0);
+					else if (bks.bks[indB].t == "water") pre.push(1);
+					else if (absrv(bks.bks[indB])) pre.push(2);
+					else pre.push(3);
+
+					indB--;
+				}
+				level += 1 / variMin;
+				level = Math.round(level * variMin) / variMin;
+			}
+			matrizQua.push(pre);
+		}
 		retChunk.matrizesQua.push(matrizQua);
 	}
 	return retChunk;
@@ -799,7 +342,6 @@ function ordenaBlocksAndCut(chunk, i, variMin) {
 		let rem = null;
 		minDepth = 31415926535;
 		for (let b of antes) {
-			if (b == null) continue;
 			if (b.depth < minDepth) {
 				minDepth = b.depth;
 				rem = b;
@@ -812,42 +354,16 @@ function ordenaBlocksAndCut(chunk, i, variMin) {
 	}
 	chunk.chunk[i] = novo;
 }
-function gradeIt(blocks, show) {
+function gradeIt(blocks) {
 	let grades = [];
-	let variMin = 10;
 	for (var a = 0; a < blocks.length; a++) {
-		if (blocks[a] == null) continue;
-		blocks[a].height = Math.round(blocks[a].height * variMin) / variMin;
-		blocks[a].depth = Math.round(blocks[a].depth * variMin) / variMin;
 		// if (chunkEqKey(chunk, chaveChunk)&&show) console.log("going-pre(" + i + "): " + JSON.stringify(chunk.chunk[i]));
-		let entring = { h: blocks[a].height, d: blocks[a].depth, t: blocks[a].thing, hd: blocks[a].hardness, color: blocks[a].color };
-		// aglutina
-		if (a >= 1) {
-			let last = grades[grades.length - 1];
-			if (last.t == entring.t && last.hd == entring.hd && last.color == entring.color) {
-				if (blocks[a - 1] != null) {
-					last.h += entring.h;
-					blocks[a - 1].height += entring.h;
-					blocks[a - 1].height = Math.round(blocks[a - 1].height * variMin) / variMin;
-					blocks[a] = null;
-					continue;
-				}
-			}
-		}
-		entring.h = Math.round(entring.h * variMin) / variMin;
-		entring.d = Math.round(entring.d * variMin) / variMin;
-		//
+		let entring = { h: blocks[a].height, d: blocks[a].depth, t: blocks[a].thing, hd: blocks[a].hardness };
 		grades.push(entring);
-
 	}
-	// refatora tirando os null de blocks
-	// if (show) console.log("in-gradeIt:\n",blocks);
-	blocks = blocks.filter(b => b != null).filter(b => b.height != 0);
-	// if (show) console.log("in-gradeIt:\n",grades);
-	//
 	let lastD = grades[0].d;
 	if (lastD != 0) {
-		grades.unshift({ h: grades[0].d, d: 0, t: "space", hd: 0, color: null });
+		grades.unshift({ h: grades[0].d, d: 0, t: "space", hd: 0 });
 		lastD = grades[0].d;
 	}
 	let ind = 0
@@ -855,57 +371,13 @@ function gradeIt(blocks, show) {
 	for (let g of grades) {
 		// console.log(lastD);
 		if (g.d != lastD) {
-			nGrades.push({ h: g.d - lastD, d: lastD, t: "space", hd: 0, color: null });
+			nGrades.push({ h: g.d - lastD, d: lastD, t: "space", hd: 0 });
 		}
 		lastD = g.d + g.h;
 		nGrades.push(g);
 		// console.log(nGrades);
 	}
-	return nGrades.map(g => {
-		g.h = Math.round(g.h * variMin) / variMin;
-		g.d = Math.round(g.d * variMin) / variMin;
-		return g;
-	}).filter(g => g.h != 0);
-}
-function matrizeIt(blocksInterfer) {
-	const canAbsrvIn = 2;
-	const absrv = (a) => a.hd < canAbsrvIn;
-	let variMin = 10;
-	let matrizQua = [];
-	for (let bks of blocksInterfer) {
-		let pre = []
-		let level = 0;
-		let numberNow = 0;
-		let qt = 0;
-		for (let indB = 0; indB < bks.bks.length; indB++) {
-			let n = null;
-			// console.log(bks.bks[indB],level);
-			qt = bks.bks[indB].h;
-			if (bks.bks[indB].t == "space") n = 0;
-			else if (bks.bks[indB].t == "water") n = 1;
-			else if (absrv(bks.bks[indB])) n = 2;
-			else n = 3;
-			qt = Math.round(qt * variMin) / variMin;
-			if (qt == 0) continue;
-			pre.push([n, qt, { thing: bks.bks[indB].t, hardness: bks.bks[indB].hd, color: bks.bks[indB].color }]);
-		}
-		// // aglutina
-		// let done = true;
-		// while (done) {
-		// 	done = false;
-		// 	for (let k = 1; k < pre.length; k++) {
-		// 		if (pre[k][0] == pre[k - 1][0]) {
-		// 			pre[k - 1][1] += pre[k][1];
-		// 			pre[k][1] = 0;
-		// 			done = true;
-		// 		}
-		// 	}
-		// 	pre = pre.filter(e => e[1] > 0);
-		// }
-		matrizQua = pre.filter(e => e[1] > 0);
-		// matrizQua = pre;
-	}
-	return matrizQua;
+	return nGrades;
 }
 // WATERFALL
 async function waterfall() {
@@ -914,14 +386,7 @@ async function waterfall() {
 	let changes = [];
 	// let mapCopied = _map.copyWithin(_map.length,0);
 	let hashesKeyChunks = getHashesKeyChunks();
-	let chaveChunk = "-100,0";
-	console.log();
-	// fs.readFileSync("./data/configs/definitions_clientToServer.json", "utf-8");
-	fs.writeFileSync(
-		"./tester/_map.json",
-		JSON.stringify(_map, null, 2), // null,2 = JSON bonito
-		"utf-8"
-	);
+	let chaveChunk = "0,0";
 	_map.map(chunk => {
 		//
 		let chA = hashesKeyChunks.get((chunk.x - 1) + "," + chunk.y);
@@ -936,7 +401,7 @@ async function waterfall() {
 			let indsRemove = [];
 			let changeNow = false
 			for (var a = 0; a < blocks.length - 1; a++) { // -1 pra não ser o ultimo
-				let show = i == 13;
+				let show = i >= 12 && i <= 15;
 				if (chunkEqKey(chunk, chaveChunk) && show) console.log("going-pre(" + i + "): " + JSON.stringify(chunk.chunk[i]));
 				// console.log()
 				if (blocks[a].thing == "water") {
@@ -1380,41 +845,8 @@ function chunkEqKey(chunk, key) {
 	return (chunk.x + "," + chunk.y) == key;
 }
 
-// message
-function send(ws, msg) {
-	msg["time"] = getTime();
-	ws.send(JSON.stringify(msg));
-}
+//
 
-// Função pra enviar para todos
-function broadcast(obj) {
-	const json = obj;
-	for (const c of clients) {
-		send(c.ws, json);
-	}
-}
-
-function broadcastExceptId(obj, id) {
-	const json = obj;
-	for (const c of clients) {
-		if (c.id == id) continue;
-		send(c.ws, json);
-	}
-}
-// auxiliares
-// function makeWaterBlock(h, d) {
-// 	return {
-// 		height: h,
-// 		depth: d,
-// 		thing: "water",
-// 		hardness: 1,
-// 		color: "#00ccffff"
-// 	};
-// }
-
-// function chunkEqKey(chunk, key) {
-// return chunk.x + "," + chunk.y == key;
-// }
 function text(msg, col) {
 	let colors = [
 		["k", 30],

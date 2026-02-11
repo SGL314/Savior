@@ -2,11 +2,11 @@
 // constantes
 const ipGeral = "192.168.0.11"; //10.96.160.102
 const porta = 3000;
-const tamanho = 30;
-const coeExpantion = 2;
+const tamanho = 4;
+const coeExpantion = 4;
 const FPS_LIMIT = 20;
 const FRAME_TIME_MS = 1000 / FPS_LIMIT;
-var tamBlock = 5; // 30
+var tamBlock = 30; // 30
 const erros = [
 	["ERRO-001", "Sem chunks a enviar;\nlogicChunk(); sending"],
 	["ERRO-002", "Chunk não encontrado para atualização"], // processAttChunk(data)
@@ -35,10 +35,10 @@ var lastFrameStart = 0;
 var now = new Date();
 var _mapOrderQueue = [];
 var _chunksToRecreateQueue = [];
-var _chunksQueue = []; //
+var _chunksQueue = []; // 🛑 VARIÁVEL FALTANTE: Fila para geração de novos chunks
 var isProcessingMapOrder = false;
 var isRecreatingGraphics = false;
-var isGeneratingChunks = false; //
+var isGeneratingChunks = false; // 🛑 VARIÁVEL FALTANTE: Flag para controlar a fila de geração
 // variaveis moveis
 var loop = -1;
 var metters = 0;
@@ -94,7 +94,7 @@ function processData(data) {
 				};
 			});
 			send({ type: "newMap", id: _id, data: _safeMapToSend });
-			// location.reload();
+			location.reload();
 			break;
 		case "map":
 		case "orderChunks":
@@ -403,7 +403,7 @@ function draw() {
 	log("", false);
 	log("init: " + Math.round((new Date() - lastTime)), true);
 	lastTime = new Date();
-	background("#5a83ffff");
+	// background("#5a83ffff");
 	toroide();
 
 	// --- 1. DESENHO DO MAPA (ISOLADO) ---
@@ -520,7 +520,7 @@ function getChunk(x, y, useSeed) {
 			// noise limitado
 			let n = noise(
 				tx * vari + desconfiguraPatterns[0]
-			) * blend; // from 0.0 to 1.0
+			) * blend;
 			// Geração de Bioma/Bloco
 			let thing = "water";
 			let tWater = 0.35;
@@ -533,73 +533,53 @@ function getChunk(x, y, useSeed) {
 			let blocks = [];
 			//
 			let gapTerrenoAcima = 50; // addIt
-			let tamBlk = 1;
 
 			switch (thing) {
 				case "water":
 					let m = (tWater - n) * coeExpantionToMetters;
 					let total = tWater * coeExpantionToMetters;
 					let colorWater = getColorByProf("water", m, total);
-					console.log(m);
-					blocks = [];
-					let t = 1;
+					blocks = []
 					if (initWithWater) {
-						t = m;
-						for (let h = 0; h < t; h += tamBlk) {
-							blocks.push(
-								{
-									height: tamBlk,
-									depth: h,
-									thing: thing,
-									hardness: 1,
-									color: colorWater
-								}
-							);
+						blocks.push({ // sem agua no começo
+							height: m,
+							depth: 0,
+							thing: thing,
+							hardness: 1,
+							color: colorWater
+						});
+					}
+					blocks.push(
+						{
+							height: (0.1) * coeExpantionToMetters,
+							depth: Math.round(m * variMin) / variMin,
+							thing: "sand",
+							hardness: 2,
+							color: getColor("sand")
 						}
-					}
-					t = (0.1) * coeExpantionToMetters;
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
-							{
-								height: tamBlk,
-								depth: h + Math.round(m * variMin) / variMin,
-								thing: "sand",
-								hardness: 2,
-								color: getColor("sand")
-							}
-						);
-					}
+					);
 					break;
 				case "earth":
-					t = 10;
-					blocks = []
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
-							{
-								height: tamBlk,
-								depth: h,
-								thing: thing,
-								hardness: thing === "stone" ? 3 : 2,
-								color: getColor(thing)
-							}
-						);
-					}
+					blocks = [
+						{
+							height: 10,
+							depth: 0,
+							thing: thing,
+							hardness: thing === "stone" ? 3 : 2,
+							color: getColor(thing)
+						}
+					];
 					break;
 				default:
-					t = 5;
-					blocks = []
-					for (let h = 0; h < t; h += tamBlk) {
-						blocks.push(
-							{
-								height: tamBlk,
-								depth: h,
-								thing: thing,
-								hardness: thing === "stone" ? 3 : 2,
-								color: getColor(thing)
-							}
-						);
-					}
-					break;
+					blocks = [
+						{
+							height: 5,
+							depth: 0,
+							thing: thing,
+							hardness: thing === "stone" ? 3 : 2,
+							color: getColor(thing)
+						}
+					];
 			}
 			// gapTerreno
 			for (let b of blocks) {   // addIt
@@ -632,6 +612,7 @@ function getChunk(x, y, useSeed) {
 
 			// Desenha o bloco no buffer gráfico
 			let draws = drawBlock(blocks);
+			console.log(i);
 			for (let k = 0; k < draws.length; k++) { // 20 paradas
 				if ((i == 0 || i == tamanho - 1) && borderInChunks) chunkGraphics.stroke(1);
 				else chunkGraphics.noStroke();
@@ -730,6 +711,8 @@ function drawBlock(blocks) {
 	return finalColors;
 }
 
+//
+
 function calculateRenderHash(chunkData) {
 	let hash = 0;
 	// Percorre apenas os dados que definem a aparência
@@ -794,7 +777,7 @@ function doMap() {
 			if (!inf) return;
 		}
 		// ... (verificação isChunkVisible) ...
-
+		
 
 
 		// 🛑 PRIORIDADE: 1. Graphics Pronto, 2. Graphics Placeholder

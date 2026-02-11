@@ -19,7 +19,7 @@ const __dirname = "/mnt/c/Users/samug/OneDrive/Documentos/Scripts/Scriptshtml/Sa
 const portaCliente = 1234;
 const portaServer = 3141;
 const portaWebSocket = 3000;
-const ipGeral = "192.168.0.11"; // 192.168.0.15 10.36.65.102
+const ipGeral = "192.168.0.13"; // 192.168.0.15 10.36.65.102
 
 // Função para obter o IP interno do WSL (172.x.x.x)
 function getWslIp() {
@@ -126,7 +126,7 @@ appServer.use(express.static(path.join(__dirname, "Servidor/logger")));
 // Rotas HTTP Servidor
 appServer.get("/getAll", (req, res) => {
 	res.json({
-		tamanho: _map.length, clientes: clients, seed: _seed,
+		tamanho: _map.length, clientes: clients,
 		things: {
 			water: countObject("water", 0, _map),
 			sand: countObject("sand", 0, _map),
@@ -138,8 +138,6 @@ appServer.get("/getAll", (req, res) => {
 appServer.get("/newMap", (req, res) => {
 	_map = [];
 	try {
-		formSeed();
-		send(clients[0].ws, { type: "seed", seed: _seed });
 		send(clients[0].ws, { type: "newMap", data: ["newMap"] });
 	} catch (e) {
 		console.log("Nenhum cliente conectado para enviar o newMap\n" + clients.length);
@@ -171,14 +169,8 @@ wss.on("connection", (ws) => {
 	});
 	send(ws, { type: "seed", seed: _seed });
 
-	if (_map.length == 0){
-		// console.log("Enviando ordem newMap para " + client.id);
-		send(ws, { type: "newMap", data: ["newMap"] });
-	}
-	else{
-		// console.log("Enviando initialMap para " + client.id);
-		send(ws, { type: "initialMap", data: _map });
-	}
+	if (_map.length == 0) send(ws, { type: "newMap", data: ["newMap"] });
+	else send(ws, { type: "initialMap", data: _map });
 
 	// ⚠️ ASYNC adicionado para processamento assíncrono
 	ws.on("message", async (msg) => {
@@ -661,100 +653,316 @@ function main() {
 	setTimeout(main, (minTime - dif < 0) ? 0 : minTime - dif);
 }
 var repeatWaterfall = 20;
-const tamanho = 30;
 // GRADEFALL
 // 000nota
 //
 async function gradefall() {
-	const eps = 0.1;
+	if (repeatWaterfall <= 0) return [];
+	// ordenar os  chunks antes de gradefall
+	let changes = [];
+	// let mapCopied = _map.copyWithin(_map.length,0);
+	let hashesKeyChunks = getHashesKeyChunks();
+	let chaveChunk = "0,0";
+	let move = 5;
+	//
+	let init = new Date();
+	let configsChunks = await getConfigs();
+	console.log("configsChunks: " + (new Date() - init) + "ms");
+	_map.map(chunk => {
 
-	const canAbsrvIn = 2;
-	const absrv = (a) => a.hardness < canAbsrvIn;
-
-	const changes = [];
-
-	// ===================================================
-	// 1. CHUNK → MATRIZ GLOBAL
-	// ===================================================
-	const mat = new Map(); // "x,y" => 0,1,2,3
-	const waterCells = [];
-
-	for (const chunk of _map) {
-		const baseX = chunk.x * tamanho;
-
-		for (let cx = 0; cx < chunk.chunk.length; cx++) {
-			const x = baseX + cx;
-
-			for (const blk of chunk.chunk[cx]) {
-				const y0 = Math.round(blk.depth);
-				const y1 = Math.round(blk.depth + blk.height);
-
-				let id = 0;
-				if (blk.thing === "water") id = 1;
-				else if (absrv(blk)) id = 2;
-				else id = 3;
-
-				for (let y = y0; y < y1; y++) {
-					mat.set(`${x},${y}`, id);
-					if (id === 1) waterCells.push({ x, y, blk, chunk });
+		let chA = hashesKeyChunks.get((chunk.x - 1) + "," + chunk.y);
+		let chB = hashesKeyChunks.get((chunk.x + 1) + "," + chunk.y);
+		// console.log(chA.x + "," +chunk.x+","+ chB.x);
+		let retChunk = configsChunks.find(c => c.x == chunk.x && c.y == chunk.y);
+		let variMin = 10;
+		let change = false;
+		let tam = chunk.chunk.length;
+		let attrib = []
+		for (var i = 0; i < chunk.chunk.length; i++) {
+			let grades = retChunk.gradess[i];
+			let blocks = chunk.chunk[i];
+			let nGrades = [];
+			// console.log(i, grades);
+			let show = i == 10 || i == 11 || i == 12;
+			if (show && chunk.x == 1 && chunk.y == 0) {
+				fs.writeFileSync(
+					"./tester/_map.json",
+					JSON.stringify(_map, null, 2), // null,2 = JSON bonito
+					"utf-8"
+				);
+			}
+			// if (!(chunkEqKey(chunk, chaveChunk) && show)) continue;
+			let microChange = false; // quando desce a água
+			// aglutine
+			for (let j = 0; j < grades.length; j++) {
+				if (j>0){
+					if (grades[j].t == grades[j-1].t){ // já estão colados
+						grades[j].h += grades[j-1].h;
+						grades[j-1].h = 0;
+					}
 				}
 			}
-		}
-	}
+			grades = grades.filter(g=>g.h>0)
+			retChunk.gradess[i] = grades;
+			// process
+			for (let j = 0; j < grades.length; j++) {
+				let g = grades[j];
+				let pos_g = (j == grades.length - 1) ? null : grades[j + 1];
+				if (pos_g != null) {
+					if (g.t == "water") {
+						console.log(g.h, "water", i, ",in", j);
+						if (pos_g.t == "space") {
+							pos_g.h = Math.round(pos_g.h * variMin) / variMin;
+							//
+							microChange = true;
+							change = true;
+							if (pos_g.h >= move) { // cabe completamente
+								console.log("tot");
+								g.d += move;
+								pos_g.d += move;
+								pos_g.h -= move;
+							}
+							else if (pos_g.h > 0) { // cabe completamente
+								console.log("parc",pos_g.h);
+								g.d += pos_g.h;
+								pos_g.d += pos_g.h;
+								pos_g.h -= pos_g.h;
+							} else {
+								console.log("uai, caiu no else ??? :", pos_g);
+							}
+						}//encontrou um chão
+						else {
+							console.log("splash");
+							//getblocks
+							let adjs = []; // {i: i}: blocksInterfer
+							if (i > 0) {
+								adjs.push({ i: i - 1 });
+							}
+							else {
+								adjs.push({ i: i - 1 }); // next chunks  
+							}
+							if (i < tam - 1) {
+								adjs.push({ i: i + 1 });
+							}
+							else {
+								adjs.push({ i: i + 1 }); // next chunks 
+							}
+							// matriz quaternária
+							// 0 : space
+							// 1 : water
+							// 2 : absorve
+							// 3 : wall
+							// getting
+							let matrizQua = []
+							for (let ad of adjs) {
+								let ch = null;
+								if (ad.i < 0) ch = chA;
+								else if (ad.i >= tam) ch = chB
+								else ch = chunk;
+								if (ch.chunk[(ad.i + tam) % tam].length > 0) {
+									matrizQua.push(configsChunks.find(c => c.x == ch.x && c.y == ch.y).matrizesQua[(ad.i + tam) % tam]);
+								}
+							}
+							matrizQua.splice(1, 0, retChunk.matrizesQua[i]);
+							//
+							console.log("entring", grades, matrizQua);
+							let indN = 1;
+							let l = 0;
+							let indSpcN = -1;
+							let upOne = false;
+							for (let m of matrizQua[indN]) {
+								if (upOne) {
+									upOne = false;
+									continue;
+								}
+								indSpcN++;
+								if (m[0] == 1) { // water
+									let indA = indN - 1;
+									let lA = 0;
+									let difA = 0;
+									let indSpcA = -1;
+									for (let m2 of matrizQua[indA]) {
+										indSpcA++;
+										lA += m2[1];
+										if (lA >= l && m2[0] == 0) { // só pode ser space
+											let da = Math.round((lA - l) * variMin) / variMin;
+											difA = Math.min(m[1], (da == 0) ? m[1] : da);
+											break;
+										}
+									}
+									//
+									let indB = indN + 1;
+									let lB = 0;
+									let difB = 0;
+									let indSpcB = -1;
+									for (let m2 of matrizQua[indB]) {
+										indSpcB++;
+										lB += m2[1];
+										if (lB >= l && m2[0] == 0) { // só pode ser space
+											let db = Math.round((lB - l) * variMin) / variMin;
+											difB = Math.min(m[1], (db == 0) ? m[1] : db);
+											break;
+										}
+									}
+									//
+									let dif = 0;
+									dif = Math.min((difA == 0) ? difB : difA, (difB == 0) ? difA : difB);// diferença acima
+									// calc
+									let qt = 1 + ((difA == 0) ? 0 : 1) + ((difB == 0) ? 0 : 1);
+									// reduce
+									dif = Math.round(dif * variMin); // pot 10
+									let reduceSide = Math.round((dif - dif % qt) / qt * variMin) / (variMin * variMin); // pot 1
+									let restante = Math.round(dif % qt) / variMin; // pot 1
+									// console.log("dfs: ", dif, difA, difB);
+									// console.log("--: ", qt, reduceSide, restante);
+									if (indSpcN > 10) continue;
+									change = true;
+									// reduz e coloca no centro
+									matrizQua[indN][indSpcN][1] -= reduceSide * (qt - 1);
+									let cor = m[2].color;
+									matrizQua[indN][indSpcN][1] = Math.round(matrizQua[indN][indSpcN][1] * variMin) / variMin;
+									// matrizQua[indN][indSpcN][1] += reduceSide * 1;
+									// matrizQua[indN].splice(indSpcN, ((matrizQua[indN][indSpcN][1] == 0) ? 1 : 0)
+									// , [1, reduceSide, { thing: "water", hardness: 1 }]); // coloca água
+									matrizQua[indN].splice(indSpcN, 0, [0, Math.round(reduceSide * (qt - 1) * variMin) / variMin, null]);
+									upOne = true;// pula 1 pra n ficar iterando sobre o mesmo
+									// matrizQua[indN].splice(indSpcN, 0, [0, reduceSide]); // space
+									// coloca
+									// reduz do centro e coloca nos lados
+									// if (difA!=0 && difB!=0){
+									// 	matrizQua[indA][indSpcA][1] += reduceSide;
+									// }
+									let alters = [
+										{ dif: difA, ind: indA, indSpc: indSpcA },
+										{ dif: difB, ind: indB, indSpc: indSpcB }
+									];
+									for (let alt of alters) {
+										if (alt.dif != 0) {
+											let level = Math.round((matrizQua[alt.ind][alt.indSpc][1] - reduceSide) * variMin) / variMin;
+											matrizQua[alt.ind].splice(alt.indSpc, 1, [1, reduceSide, { thing: "water", hardness: 1, color: cor }]); // coloca água
+											matrizQua[alt.ind].splice(alt.indSpc, 0, [0, level, null]); // space
+										}
+										//
+									}
+									// console.log("result: ", matrizQua);
+								}
+								l += m[1];
+							}
+							//encoding
+							// console.log("encoding", matrizQua);
+							let indLine = 0
+							adjs = [adjs[0], { i: i }, adjs[1]]
+							for (let ad of adjs) {
+								let ch = null;
+								if (ad.i < 0) ch = chA;
+								else if (ad.i >= tam) ch = chB
+								else ch = chunk;
 
-	// snapshot
-	const next = new Map(mat);
+								if (ch.chunk[(ad.i + tam) % tam].length > 0) {
+									let blks = [];
+									let dp = 0;
+									// if ((ad.i + tam) % tam==14){
+									// 	console.log("process encoding\n",matrizQua[indLine]);
+									// }
+									for (let blk of matrizQua[indLine]) {
+										dp += blk[1];
+										if (blk[0] == 0 || blk[1] == 0) continue; // space || nada
+										dp -= blk[1];
+										blks.push({
+											height: blk[1],
+											depth: Math.round(dp * variMin) / variMin,
+											thing: blk[2].thing,
+											hardness: blk[2].hardness,
+											color: blk[2].color
+										});
+										dp += blk[1];
+									}
+									attrib.push({
+										keyChunk: { x: ch.x, y: ch.y },
+										local: (ad.i + tam) % tam,
+										what: blks
+									});
+									// if ((ad.i + tam) % tam==14){
+									// 	console.log("pre-final\n",blks);
+									// }
+									// atribuição 
+									let retChunk_ = configsChunks.find(c => c.x == ch.x && c.y == ch.y);
+									let grades_ = gradeIt(blks, (ad.i + tam) % tam == 14);
+									retChunk_.gradess[(ad.i + tam) % tam] = grades_;
+									retChunk_.matrizesQua[(ad.i + tam) % tam] = matrizeIt([{ i: ad.i, bks: retChunk_.gradess[(ad.i + tam) % tam] }]);
+									// colocação
+									let blocks_ = blks;
 
-	// ===================================================
-	// 2. SIMULAÇÃO (SÓ MATRIZ)
-	// ===================================================
-	for (const w of waterCells) {
-		const { x, y } = w;
+									// for (let b of blocks_) {
+									// 	ind++;
+									// 	while (grades_[ind].t == "space") { ind++; }
+									// 	b.height = grades_[ind].h;
+									// 	b.depth = grades_[ind].d;
+									// 	// console.log(b.thing,b.height,b.depth);
+									// }
+									ch.chunk[(ad.i + tam) % tam] = blocks_;
+									// send
+									changes.push({
+										key: { x: ch.x, y: ch.y },
+									});
+									microChange = true;
+									//
+									if ((ad.i + tam) % tam == 14) {
+										console.log("Final");
+										console.log(ad, ch.x, (ad.i + tam) % tam, blks);
+									}
+									// console.log(ad.i,blks);
 
-		// tentar cair
-		const below = `${x},${y + 1}`;
-		if (!mat.has(below)) {
-			next.delete(`${x},${y}`);
-			next.set(below, 1);
-			continue;
-		}
+								}
+								indLine++;
+							}
+						}
+					}
+				}
 
-		// tentar absorver
-		if (mat.get(below) === 2) {
-			next.delete(`${x},${y}`);
-			continue;
-		}
-
-		// espalhar
-		const dirs = [-1, 1];
-		for (const dx of dirs) {
-			const side = `${x + dx},${y}`;
-			const sideBelow = `${x + dx},${y + 1}`;
-
-			if (!mat.has(side) && !mat.has(sideBelow)) {
-				next.delete(`${x},${y}`);
-				next.set(side, 1);
-				break;
+				// nGrades[j] = g;
+				// if (pos_g != null) {
+				// 	nGrades[j + 1] = pos_g;
+				// }
+			}
+			if (microChange) {
+				// grades = nGrades;
+				console.log("Final");
+				// encoding
+				// recria os blocks
+				let nBlocks = [];
+				for (let b of grades) {
+					if (b == null || b == undefined || b.t == "space") continue;
+					let nB = {
+						height: b.h,
+						depth: b.d,
+						thing: b.t,
+						hardness: b.hd,
+						color: b.color
+					}
+					nBlocks.push(nB);
+				}
+				chunk.chunk[i] = nBlocks;
 			}
 		}
-	}
-
-	// ===================================================
-	// 3. MATRIZ → CHUNK (APLICAÇÃO REAL)
-	// ===================================================
-	for (const w of waterCells) {
-		const key = `${w.x},${w.y}`;
-
-		if (!next.has(key)) {
-			w.blk.depth += 1 - eps;
-			changes.push(w.chunk);
+		if (change) {
+			changes.push({
+				key: { x: chunk.x, y: chunk.y },
+			});
+			// attrib
+			for (let att of attrib) {
+				// changes.push({
+				// 	key: { x: att.keyChunk.x, y: att.keyChunk.y },
+				// });
+				// _map.filter(c => c.x == att.keyChunk.x && c.y == att.keyChunk.y)[0].chunk[att.local] = att.what;
+				// repeatWaterfall--;
+			}
 		}
-	}
-
-	return [...new Set(changes)].map(c => ({ key: { x: c.x, y: c.y } }));
+	});
+	//
+	console.log("returning");
+	return changes;
 }
-
-
 function getConfigs() {
 	let retorno = [];
 	_map.map(chunk => {

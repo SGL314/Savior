@@ -1,72 +1,191 @@
-import { parentPort, workerData } from 'worker_threads';
-var initPos = { x: 0, y: 0 };
-// orderChunks
-function quickSort(arr, comparator) {
-	// Caso base: arrays com 0 ou 1 elemento já estão ordenados
-	if (arr.length <= 1) {
-		return arr;
+import express from "express";
+import { pri, getId, getDate, getTime } from "../../Auxs/auxiliar.js";
+import path from "path";
+import { Worker } from "worker_threads";
+import os from "os";
+import { exec } from "child_process";
+import { WebSocketServer } from "ws";
+import fs from "fs";
+
+const raw = fs.readFileSync("../data/configs/definitions_clientToServer.json", "utf-8");
+const json = JSON.parse(raw);
+
+const stepDefaultMetters = json.stepDefaultMetters;
+const coeExpantionToMetters = json.coeExpantionToMetters;
+
+// game variables
+var _map = []; // mapa do jogo
+var _seed = 2906;
+
+setTimeout(() => { main(); console.log("Iniciando main()"); }, 0);
+_map = JSON.parse(fs.readFileSync("./_map.json", "utf-8"));
+var processingInMain = {
+	"waterfall": false,
+	"gradefall": false
+};
+function main() {
+	let initMain = new Date();
+	// return;
+	// if (!processingInMain["waterfall"]) {
+	// 	processingInMain["waterfall"] = true;
+	// 	setTimeout(async () => { // com bugs
+	// 		let init = new Date();
+	// 		// try { console.log("in: " + JSON.stringify(_map.filter(c => c.x == 0)[0].chunk[21])); } catch (e) { }
+	// 		let ret = await waterfall();
+	// 		if (ret.length > 0) {
+	// 			// console.log("---waterfall--- "+JSON.stringify(_map.filter(c=>c.x==0 && c.y==0)[0].chunk[23][23]));
+	// 			let chunks = _map.filter(c => {
+	// 				for (let r of ret) {
+	// 					if (c.x == r.key.x) return true;
+	// 				}
+	// 				return false;
+	// 			});
+	// 			// console.log(chunks[0].chunk[21]);
+	// 			// type: "attChunks",
+	// 			// data: [{
+	// 			// 	keyChunk: { x: chunkAtt.x, y: chunkAtt.y },
+	// 			// 	chunk: chunkAtt
+	// 			// }]
+	// 			let data = chunks.map(c => ({
+	// 				keyChunk: { x: c.x, y: c.y },
+	// 				chunk: c
+	// 			}));
+	// 			broadcast({ type: "attChunks", data: data });
+	// 			// simulateAttChunks(data);
+	// 			//
+	// 			let txt = "";
+	// 			let t = 0;
+	// 			let vt = 0;
+	// 			let variMin = 10;
+	// 			data.map(c => {
+	// 				let chunk = c.chunk;
+	// 				for (let blk of chunk.chunk) {
+	// 					if (!JSON.stringify(blk).includes("water")) continue;
+	// 					for (let i = 0; i < blk.length; i++) {
+	// 						let b = blk[i];
+	// 						if (b.thing == "water") {
+	// 							t++;
+	// 							b.height = Math.round(b.height * variMin) / variMin;
+	// 							b.depth = Math.round(b.depth * variMin) / variMin;
+
+	// 							vt += b.height;
+	// 							txt += t + "(" + chunk.chunk.indexOf(blk) + "): " + JSON.stringify(b) + " - ";
+	// 							txt += " " + JSON.stringify(blk[i + 1]) + "\n";
+	// 						} else if (i > 0 && blk[i - 1].thing == "water") {
+	// 						}
+
+
+	// 					}
+
+	// 				}
+	// 			});
+	// 			txt += "\n---: " + JSON.stringify(data[0].chunk.chunk[7]) + "\n";
+	// 			txt += "\nvt: " + vt;
+	// 			let k = (vt != 5 && vt != 5.000000000000001 && vt != 4.999999999999999
+	// 				&& vt != 4.999999999999998
+	// 			) ? "\x1b[34m" : "";
+	// 			// console.log(k + txt);
+
+	// 		}
+	// 		console.log("wtfll: " + (new Date() - init) + "ms : " + countObject("water", 0, _map));
+	// 		processingInMain["waterfall"] = false;
+	// 	});
+	// }
+	if (!processingInMain["gradefall"]) {
+		processingInMain["gradefall"] = true;
+		setTimeout(async () => { // com bugs
+			let init = new Date();
+			// try { console.log("in: " + JSON.stringify(_map.filter(c => c.x == 0)[0].chunk[21])); } catch (e) { }
+			let ret = await gradefall();
+			if (ret.length > 0) {
+				// console.log("---waterfall--- "+JSON.stringify(_map.filter(c=>c.x==0 && c.y==0)[0].chunk[23][23]));
+				let chunks = _map.filter(c => {
+					for (let r of ret) {
+						if (c.x == r.key.x) return true;
+					}
+					return false;
+				});
+				// console.log(chunks[0].chunk[21]);
+				// type: "attChunks",
+				// data: [{
+				// 	keyChunk: { x: chunkAtt.x, y: chunkAtt.y },
+				// 	chunk: chunkAtt
+				// }]
+				let data = chunks.map(c => ({
+					keyChunk: { x: c.x, y: c.y },
+					chunk: c
+				}));
+				broadcast({ type: "attChunks", data: data });
+				// simulateAttChunks(data);
+				//
+				let txt = "";
+				let t = 0;
+				let vt = 0;
+				let variMin = 10;
+				data.map(c => {
+					let chunk = c.chunk;
+					for (let blk of chunk.chunk) {
+						if (!JSON.stringify(blk).includes("water")) continue;
+						for (let i = 0; i < blk.length; i++) {
+							let b = blk[i];
+							if (b.thing == "water") {
+								t++;
+								b.height = Math.round(b.height * variMin) / variMin;
+								b.depth = Math.round(b.depth * variMin) / variMin;
+
+								vt += b.height;
+								txt += t + "(" + chunk.chunk.indexOf(blk) + "): " + JSON.stringify(b) + " - ";
+								txt += " " + JSON.stringify(blk[i + 1]) + "\n";
+							} else if (i > 0 && blk[i - 1].thing == "water") {
+							}
+
+
+						}
+
+					}
+				});
+				txt += "\n---: " + JSON.stringify(data[0].chunk.chunk[7]) + "\n";
+				txt += "\nvt: " + vt;
+				let k = (vt != 5 && vt != 5.000000000000001 && vt != 4.999999999999999
+					&& vt != 4.999999999999998
+				) ? "\x1b[34m" : "";
+				// console.log(k + txt);
+
+			}
+			console.log("gdfll: " + (new Date() - init) + "ms : "); //  + countObject("water", 0, _map)
+			processingInMain["gradefall"] = false;
+		});
 	}
-
-	// 1. Escolher um Pivô (Escolhemos o elemento do meio para simplicidade)
-	const pivotIndex = Math.floor(arr.length / 2);
-	const pivot = arr[pivotIndex];
-
-	// 2. Particionar o array
-	const less = [];    // Elementos que vêm antes do pivô
-	const greater = []; // Elementos que vêm depois do pivô
-	const equal = [];   // Elementos iguais ao pivô (opcional, mas bom para estabilidade)
-
-	for (let i = 0; i < arr.length; i++) {
-		const item = arr[i];
-		const comparisonResult = comparator(item, pivot);
-
-		if (comparisonResult < 0) {
-			less.push(item);
-		} else if (comparisonResult > 0) {
-			greater.push(item);
-		} else {
-			// Inclui o pivô e elementos iguais no array 'equal'
-			equal.push(item);
-		}
-	}
-
-	// 3. Combinar os resultados recursivamente
-	// [quickSort(menos)] + [iguais/pivô] + [quickSort(maiores)]
-	return [
-		...quickSort(less, comparator),
-		...equal,
-		...quickSort(greater, comparator)
-	];
+	let dif = new Date() - initMain;
+	setTimeout(main, (100 - dif < 0) ? 0 : 100 - dif);
 }
-function compareChunksByDistance(a, b) {
-	// Calcula a distância de Manhattan para a chunk 'a' 
-	const distA = Math.pow(Math.pow(a.x - initPos.x, 2) + Math.pow(a.y - initPos.y, 2), .5);
+var repeatWaterfall = 1;
 
-	// Calcula a distância de Manhattan para a chunk 'b'
-	const distB = Math.pow(Math.pow(b.x - initPos.x, 2) + Math.pow(b.y - initPos.y, 2), .5);
-
-	// Se a diferença for negativa, A (mais perto) vem antes de B.
-	// Se a diferença for positiva, B (mais perto) vem antes de A.
-	return distA - distB;
-}
 // WATERFALL
-var repeatWaterfall = 20;
-var stepDefaultMetters = 0;
-var coeExpantionToMetters = 0;
-async function waterfall(map) {
+async function waterfall() {
 	if (repeatWaterfall <= 0) return;
-	// ordenar antes de waterfall
+	// ordenar os blocks e os chunks antes de waterfall
 	let changes = [];
 	// let mapCopied = _map.copyWithin(_map.length,0);
-	map.map(chunk => {
+	let hashesKeyChunks = getHashesKeyChunks();
+	let chaveChunk = "0,0";
+	_map.map(chunk => {
+		//
+		let chA = hashesKeyChunks.get((chunk.x - 1) + "," + chunk.y);
+		let chB = hashesKeyChunks.get((chunk.x + 1) + "," + chunk.y);
+		// console.log(chA.x + "," +chunk.x+","+ chB.x);
+		//
 		let variMin = 10;
 		let change = false;
 		let tam = chunk.chunk.length;
 		for (var i = 0; i < chunk.chunk.length; i++) {
 			let blocks = chunk.chunk[i];
 			let indsRemove = [];
+			let changeNow = false
 			for (var a = 0; a < blocks.length - 1; a++) { // -1 pra não ser o ultimo
-				// if (chunkEqKey(chunk, "0") && i == 21) console.log("going-pre-inner(" + i + "): " + JSON.stringify(chunk.chunk[i]));
+				let show = i >= 12 && i <= 15;
+				if (chunkEqKey(chunk, chaveChunk) && show) console.log("going-pre(" + i + "): " + JSON.stringify(chunk.chunk[i]));
+				// console.log()
 				if (blocks[a].thing == "water") {
 					let v = blocks[a].height;
 					if (v == 0) {
@@ -81,74 +200,59 @@ async function waterfall(map) {
 						blocks[a].depth += v;
 						// console.log("down total");
 						change = true;
+						changeNow = true;
 					} else if (blocks[a + 1].depth > p) { // cabe parcialmente
 						let cab = blocks[a + 1].depth - p;
 						blocks[a].depth += cab;
 						// console.log("down parcial");
 						change = true;
+						changeNow = true;
 					} else if (blocks[a + 1].thing == "water") { // aglutinate water
 						blocks[a].height += blocks[a + 1].height;
 						blocks.splice(a + 1, 1);
 						// console.log("aglutinate");
 						change = true;
+						changeNow = true;
 					} else { // splash water
 
-						// console.log("splash")
+						if (chunkEqKey(chunk, chaveChunk) && show) console.log("splash")
 						// getting 
 						let init_ = [{ i: i }]
 						let adjs = [];
 						if (i > 0) {
 							adjs.push({ i: i - 1 });
 						}
+						else {
+							adjs.push({ i: i - 1 }); // next chunks  
+						}
 						if (i < tam - 1) {
 							adjs.push({ i: i + 1 });
 						}
-						// get adjs adjs
-						// let rep = init_;
-						// while (true) {
-						// 	const inner = (a, b) => {
-						// 		let r = false;
-						// 		b.map(c => {
-						// 			if (c.i == a.i) r |= true;
-						// 			r |= false;
-						// 		});
-						// 		// console.log(r);
-						// 		return r;
-						// 	}
-						// 	let added = false;
-						// 	let nRep = [];
-						// 	for (let ad of rep) {
-						// 		if (ad.i > 0 && chunk.chunk[ad.i - 1].length > 0 && (chunk.chunk[ad.i - 1][0].thing == "water" || ad.i == i)) {
-						// 			let add = { i: ad.i - 1 };
-						// 			if (ad.i - 1 != i && !inner(add, adjs)) {
-						// 				adjs.push(add);
-						// 				added = true;
-						// 				if (chunk.chunk[ad.i - 1][0].thing == "water") nRep.push(add);
-						// 			}
-						// 		}
-						// 		if (ad.i < tam - 1 && chunk.chunk[ad.i + 1].length > 0 && (chunk.chunk[ad.i + 1][0].thing == "water" || ad.i == i)) {
-						// 			let add = { i: ad.i + 1 };
-						// 			if (ad.i + 1 != i && !inner(add, adjs)) {
-						// 				adjs.push(add);
-						// 				added = true;
-						// 				if (chunk.chunk[ad.i + 1][0].thing == "water") nRep.push(add);
-						// 			}
-						// 		}
-						// 	}
-						// 	if (!added) break;
-						// 	nRep.map(c => {
-						// 		rep.push(c);
-						// 	});
-						// 	// console.log(adjs);
-						// }
-
+						else {
+							adjs.push({ i: i + 1 }); // next chunks 
+						}
 
 						// getting
 						let holes = []
 						for (let ad of adjs) {
-							if (chunk.chunk[ad.i].length > 0) {
+							let ch = null;
+							if (ad.i < 0) ch = chA;
+							else if (ad.i >= tam) ch = chB
+							else ch = chunk;
+							// console.log(ad.i);
+							// console.log(ch.x);
+							if (ch.chunk[(ad.i + tam) % tam].length > 0) {
 								holes.push({ i: ad.i });
 							}
+							// console.log("end")
+							// try { // erro bizarro q rola qnd vai reconstruir o chunk lá no mai
+							// 	if (ch.chunk[(ad.i + tam) % tam].length > 0) {
+							// 		holes.push({ i: ad.i });
+							// 	}
+							// } catch (e) {
+							// 	console.log("mini-erro bizarro");
+							// 	continue;
+							// }
 						}
 						// verify se tem q ficar quieto
 						let ver = [{
@@ -156,12 +260,19 @@ async function waterfall(map) {
 							pos: { i: i }
 						}];
 						holes.map(b => {
+							let ch = null;
+							if (b.i < 0) ch = chA;
+							else if (b.i >= tam) ch = chB;
+							else ch = chunk;
+
 							ver.push({
-								block: chunk.chunk[b.i],
+								block: ch.chunk[(b.i + tam) % tam],
 								pos: { i: b.i }
 							});
 						});
-						// console.log(ver);
+						if (chunkEqKey(chunk, chaveChunk) && show) {
+							for (let v of ver) console.log("ver: " + JSON.stringify(v))
+						}
 						// verifica
 						let quiet = true;
 						for (let v = 1; v < ver.length; v++) {
@@ -220,8 +331,13 @@ async function waterfall(map) {
 
 											// console.log(JSON.stringify(ver));
 											// reatrib
+
 											ver.map(b => {
-												chunk.chunk[b.pos.i] = b.block;
+												let ch = null;
+												if (b.pos.i < 0) ch = chA
+												else if (b.pos.i >= tam) ch = chB;
+												else ch = chunk;
+												ch.chunk[(b.pos.i + tam) % tam] = b.block;
 											});
 											// console.log("\x1b[33m reatrib: (" + countWater(0, chunk) + ")\n\n" + JSON.stringify(chunk.chunk));
 										}
@@ -239,7 +355,11 @@ async function waterfall(map) {
 						// level
 						let levels = [{ h: 0 * variMin, d: chunk.chunk[i][1].depth * variMin, p: { i: i } }];
 						for (let h of holes) {
-							levels.push({ h: 0 * variMin, d: chunk.chunk[h.i][0].depth * variMin, p: { i: h.i } });
+							let ch = null;
+							if (h.i < 0) ch = chA
+							else if (h.i >= tam) ch = chB;
+							else ch = chunk;
+							levels.push({ h: 0 * variMin, d: ch.chunk[(h.i + tam) % tam][0].depth * variMin, p: { i: h.i } });
 						}
 						// ordena
 						levels.sort((a, b) => b.d - a.d);
@@ -247,6 +367,9 @@ async function waterfall(map) {
 						// console.log(JSON.stringify(levels));
 						// leveller
 						let thisRepeat = 5;
+						if (chunkEqKey(chunk, chaveChunk) && show) {
+							for (let l of levels) console.log("l: " + JSON.stringify(l) + '\n')
+						}
 						while (true) {
 							v = (blocks[a].height) * variMin;
 							if (thisRepeat <= 0 || v == 0) break;
@@ -300,12 +423,14 @@ async function waterfall(map) {
 								if (dif % qt == 0) {
 									for (let b of mins) {
 										change = true;
+										changeNow = true;
 										levels[b].h += dif / qt;
 									}
 								} else {
 									let r = (dif - dif % qt) / qt;
 									for (let b of mins) {
 										change = true;
+										changeNow = true;
 										levels[b].h += r;
 									}
 									// distribui o resto
@@ -313,6 +438,7 @@ async function waterfall(map) {
 									for (let b of mins) {
 										if (r == 0) break;
 										change = true;
+										changeNow = true;
 										levels[b].h += 1;
 										r -= 1;
 									}
@@ -323,6 +449,7 @@ async function waterfall(map) {
 								if (v % qt == 0) {
 									let r = v / qt;
 									change = true;
+									changeNow = true;
 									for (let b of mins) {
 										if (v == 0) break;
 										levels[b].h += r;
@@ -330,6 +457,7 @@ async function waterfall(map) {
 									}
 								} else {
 									change = true;
+									changeNow = true;
 									let r = (v - v % qt) / qt;
 									for (let b of mins) {
 										if (v == 0) break;
@@ -369,7 +497,11 @@ async function waterfall(map) {
 									// console.log(i + ":> " + JSON.stringify(chunk.chunk[21]));
 								}
 								else {
-									chunk.chunk[l.p.i].unshift(base);
+									let ch = null;
+									if (l.p.i < 0) ch = chA
+									else if (l.p.i >= tam) ch = chB;
+									else ch = chunk;
+									ch.chunk[(l.p.i + tam) % tam].unshift(base);
 									// console.log(l.p.i + ": " + JSON.stringify(chunk.chunk[l.p.i]));
 								}
 							}
@@ -380,7 +512,7 @@ async function waterfall(map) {
 						// if (chunkEqKey(chunk, "0") && i == 21) console.log("going-pre-inner(" + i + "): " + JSON.stringify(chunk.chunk[i]));
 					}
 					blocks[a].color = getColorByProf("water", blocks[a].height, stepDefaultMetters * 7 * coeExpantionToMetters)
-					if (change) break;
+					if (changeNow) break; // dizem q n pode tirar
 				}
 				// cores
 			}
@@ -388,17 +520,17 @@ async function waterfall(map) {
 			// 	// console.log("going-pre: " + JSON.stringify(chunk.chunk[i]));
 			// }
 			chunk.chunk[i] = blocks;
-			if (change) {
-				// console.log("fn ("+i+"):"+countWater(0, chunk));
-				// let idN = Math.round(Math.random() * 100);
-				// console.log('>m-ret ' + idN);
-				// miniRet([{
-				// 	key: { x: chunk.x }
-				// }], idN);
-				// console.log('<m-ret ('+JSON.stringify(indsRemove)+')' + JSON.stringify(chunk.chunk[5])+ JSON.stringify(chunk.chunk[6])+ JSON.stringify(chunk.chunk[7]));
-			}
+			// if (change) {
+			// 	// console.log("fn ("+i+"):"+countWater(0, chunk));
+			// 	// let idN = Math.round(Math.random() * 100);
+			// 	// console.log('>m-ret ' + idN);
+			// 	// miniRet([{
+			// 	// 	key: { x: chunk.x }
+			// 	// }], idN);
+			// 	// console.log('<m-ret ('+JSON.stringify(indsRemove)+')' + JSON.stringify(chunk.chunk[5])+ JSON.stringify(chunk.chunk[6])+ JSON.stringify(chunk.chunk[7]));
+			// }
 			for (let ind = 0; ind < blocks.length; ind++) {
-				if (chunk.chunk[i][ind].thing == "water" && chunk.chunk[i][ind].height == 0) chunk.chunk[i].splice(ind, 1);
+				if (chunk.chunk[i][ind].height == 0) chunk.chunk[i].splice(ind, 1);
 			}
 			// if (change){
 			// 	console.log("r-fn ("+i+"):"+countWater(0, chunk));
@@ -411,42 +543,27 @@ async function waterfall(map) {
 				key: { x: chunk.x, y: chunk.y },
 			});
 		}
-		// //
-		// let txt = "";
-		// let t = 0;
-		// let vt = 0;
-		// for (let blk of chunk.chunk) {
-		// 	if (!JSON.stringify(blk).includes("water")) continue;
-		// 	for (let i = 0; i < blk.length; i++) {
-		// 		let b = blk[i];
-		// 		if (b.thing == "water") {
-		// 			t++;
-		// 			b.height = Math.round(b.height * variMin) / variMin;
-		// 			b.depth = Math.round(b.depth * variMin) / variMin;
-
-		// 			vt += b.height;
-		// 			txt += t + "(" + chunk.chunk.indexOf(blk) + "): " + JSON.stringify(b) + " - ";
-		// 			txt += " " + JSON.stringify(blk[i + 1]) + "\n";
-		// 		} else if (i > 0 && blk[i - 1].thing == "water") {
-		// 			// txt +=  "---: " + JSON.stringify(b) + "\n";
-		// 		}
-
-
-		// 	
-
-		// }
-		// txt += "\nvt: " + vt;
-		// console.log(txt);
-		// return;
-		// repeatWaterfall-=1;
-
-
 	});
 	//
 	// console.log("\x1b[31m returning");
-	return [map, changes];
+	return changes;
 }
 // auxs
+function getHashesKeyChunks() {
+	let a = new Map();
+	let mnx = 31415926535;
+	let mxx = -31415926535;
+	for (let c of _map) {
+		a.set(c.x + "," + c.y, c);
+		if (c.x < mnx) mnx = c.x;
+		if (c.x > mxx) mxx = c.x;
+	}
+	// define os de tras e os da frente como os q dá a volta (sem y)
+	a.set((mnx - 1) + "," + 0, a.get(mxx + "," + 0));
+	a.set((mxx + 1) + "," + 0, a.get(mnx + "," + 0));
+	// console.log(a.get((mnx-1) + "," + 0));
+	return a;
+}
 function makeWaterBlock(h, d) {
 	return {
 		height: h,
@@ -476,55 +593,89 @@ function getColorByProf(thing, m, total) {
 
 	}
 }
-
-// MAIN
-
-// 1. O código do Worker começa a executar aqui.
-// 'workerData' contém o objeto passado na criação da thread.
-try {
-	const dataFromMain = workerData;
-	// console.log(JSON.stringify(dataFromMain.map.length));
-	var result = ["ok", "-nada-"]; // identificação, result
-
-	// 2. Executa a tarefa demorada
-	switch (dataFromMain.type) {
-		case "orderChunks":
-			initPos = dataFromMain.pos;
-			result[1] = quickSort(dataFromMain.map, compareChunksByDistance);
-			// console.log(result.map(c => `(${c.x}, ${c.y}) - Distância: ${compareChunksByDistance(c, initPos)}`))
+function countObject(object, nivel, place) {
+	let variMin = 10;
+	let v = 0;
+	switch (nivel) {
+		case 0:
+			v = 0;
+			place.map(chunk => {
+				for (let l of chunk.chunk) {
+					for (let b of l) {
+						if (b.thing == object) v += b.height;
+					}
+				}
+			});
+			// 441.8449447231262 = 441.9
+			// 447.9
+			// 452.9
 			break;
-		case "waterfall":
-			stepDefaultMetters = dataFromMain.configs.stepDefaultMetters;
-			coeExpantionToMetters = dataFromMain.configs.coeExpantionToMetters;
-			result[1] = await waterfall(dataFromMain.map);
+		case 1:
+			v = 0;
+			for (let l of place.chunk) {
+				for (let b of l) {
+					if (b.thing == bject) v += b.height;
+				}
+			}
 			break;
 		default:
-			result[0] = "erro";
-			let msg = "Comando desconhecido: " + dataFromMain.type;
-			result[1] = msg;
-			console.error("worker.js - " + msg);
-			break;
+			return -314;
 	}
+	return Math.round(v * variMin) / variMin;
+}
+function chunkEqKey(chunk, key) {
+	return (chunk.x + "," + chunk.y) == key;
+}
 
-	// 3. Envia o resultado de volta para a Thread Principal
-	if (parentPort) {
-		if (result[0] == "ok") parentPort.postMessage(result[1]);
-		else if (result[1] == "erro") {
-			parentPort.postMessage({
-				status: "error",
-				message: result[1]
-			});
-		}
-	}
+//
 
-} catch (error) {
-	console.error("Erro fatal na Worker Thread:", error);
+function text(msg, col) {
+	let colors = [
+		["k", 30],
+		["r", 31],
+		["g", 32],
+		["y", 33],
+		["b", 34],
+		["m", 35],
+		["c", 36],
+		["w", 37],
 
-	// 4. Em caso de erro, notifica a Thread Principal
-	if (parentPort) {
-		parentPort.postMessage({
-			status: "error",
-			message: error.message
-		});
-	}
+		// ["K", 90],
+		// ["R", 91],
+		// ["G", 92],
+		// ["Y", 93],
+		// ["B", 94],
+		// ["M", 95],
+		// ["C", 96],
+		// ["W", 97],
+
+		["bgk", 40],
+		["bgr", 41],
+		["bgg", 42],
+		["bgy", 43],
+		["bgb", 44],
+		["bgm", 45],
+		["bgc", 46],
+		["bgw", 47],
+
+		["bold", 1],
+		["underline", 4],
+		["blink", 5],
+		["reverse", 7],
+		["hidden", 8],
+
+	]
+	let ls = col.split("-")
+	let color = ls[0];
+	let bg = ls[1];
+	let style = ls[2];
+	//
+	color = "\x1b[" + colors.filter(e => e[0] == color)[0][1] + "m";
+	bg = (ls.length > 1) ? "\x1b[" + colors.filter(e => e[0] == bg)[0][1] + "m" : "";
+	style = (ls.length > 2) ? "\x1b[" + colors.filter(e => e[0] == style)[0][1] + "m" : "";
+	//
+	console.log(color + bg + style + msg + "\x1b[0m");
+}
+function erro(msg) {
+	text(msg, "b-bgr-bold");
 }

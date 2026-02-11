@@ -15,14 +15,10 @@
 html, head, body {
     overscroll-behavior-y: none;
 	overscroll-behavior-x: none;
-	overflow: hidden; 
 	background: var(--back);
 }
 .geral{
 	margin: 5px;
-	overscroll-behavior-y: none;
-	overscroll-behavior-x: none;
-	overflow: hidden; 
 }
 h1{
 	font-size: 30px;
