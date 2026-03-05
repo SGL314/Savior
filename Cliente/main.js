@@ -1,6 +1,6 @@
 // 14/12/2025 22h45
 // constantes
-const ipGeral = "192.168.0.11"; //10.96.160.102
+const ipGeral = "192.168.0.13"; //10.96.160.102
 const porta = 3000;
 const tamanho = 30;
 const coeExpantion = 2;
@@ -12,7 +12,7 @@ const erros = [
 	["ERRO-002", "Chunk não encontrado para atualização"], // processAttChunk(data)
 	["ERRO-003", "Tipo de funcDraw() de buttons não definido"], // buttons
 ];
-const tamanhoMaximo = [4, 1]; // 40,20
+const tamanhoMaximo = [8, 1]; // 40,20 (40 na horizontal e 20 na vertical)
 // variaveis
 var _map = [];
 var _seed = 1234;
@@ -40,6 +40,7 @@ var isProcessingMapOrder = false;
 var isRecreatingGraphics = false;
 var isGeneratingChunks = false; //
 // variaveis moveis
+var zoom = 2, initZoom = 1; // tudo 1
 var loop = -1;
 var metters = 0;
 var selectPutting = "";
@@ -47,7 +48,6 @@ let _chunk = [0, 0];
 let _poss = [tamBlock / 2, tamBlock / 2];
 _poss[0] += 11 * tamBlock + 1 * tamanho * tamBlock; // teste
 _poss[1] += 10 * tamBlock; // teste
-var zoom = 4, initZoom = 1; // tudo 1
 // variaveis de iteração
 var initializedDoubleTouch = false
 var startedTouch = [0, 0];
@@ -462,9 +462,14 @@ function _newMap(useSeed) {
 	console.log("Creating " + useSeed);
 	let map = [];
 	// não dá pra não criar tudo se não da bug no waterfall
-	for (let i = -(tamanhoMaximo[0] - 1) - 1; i <= tamanhoMaximo[0] - 1; i++) {
-		for (let j = -(tamanhoMaximo[1] - 1); j <= tamanhoMaximo[1] - 1; j++) {
-			let chunk = getChunk(i, j, useSeed);
+	for (let i = 0; i < tamanhoMaximo[0]; i++) {
+		let rx = (tamanhoMaximo[0]%2==0)?tamanhoMaximo[0]/2:tamanhoMaximo[0]/2-0.5;
+		for (let j = 0; j < tamanhoMaximo[1]; j++) {
+			let ry = (tamanhoMaximo[1]%2==0)?tamanhoMaximo[1]/2:tamanhoMaximo[1]/2-0.5;
+			rx = Math.round(rx*10)/10;
+			ry = Math.round(ry*10)/10;
+			let chunk = getChunk(i-rx, j-ry, useSeed);
+			console.log("Chunk criado: " + chunk.x + ", " + chunk.y);
 			map.push(chunk);
 		}
 	}
@@ -494,6 +499,8 @@ function getChunk(x, y, useSeed) {
 	let chunkSizePx = tamanho * tamBlock;
 	let chunkGraphics = createGraphics(chunkSizePx, chunkSizePx);
 	chunkGraphics.noStroke();
+	let blending = false;
+	let t = 1;
 	// console.log(chunkGraphics.length);
 	if (useSeed) {
 		for (let i = 0; i < tamanho; i++) {
@@ -504,14 +511,16 @@ function getChunk(x, y, useSeed) {
 
 			let blend = 1;
 
-			if (x <= -tamanhoMaximo[0] + 1) {
+			if (x <= -tamanhoMaximo[0]/2 + 1) {
 				// 90 - (3 - 1) * 30 = 90 - 60 = 30
-				t = (abs(gx) - (tamanhoMaximo[0] - 1) * tamanho) / (tamanho * 2)
+				blending = true;
+				t = (abs(gx) - (tamanhoMaximo[0]/2 - 1) * tamanho) / (tamanho * 2)
 				blend = 1 / (1 + Math.exp(t * 10))
 			}
-			if (x >= tamanhoMaximo[0] - 2) {
+			if (x >= tamanhoMaximo[0]/2 - 2) {
 				// 90 - (3 - 1) * 30 = 90 - 60 = 30
-				t = (gx - (tamanhoMaximo[0] - 1) * tamanho) / (tamanho * 2)
+				blending = true;
+				t = (gx - (tamanhoMaximo[0]/2 - 1) * tamanho) / (tamanho * 2)
 				blend = 1 / (1 + Math.exp(t * 10))
 			}
 
@@ -540,9 +549,9 @@ function getChunk(x, y, useSeed) {
 					let m = (tWater - n) * coeExpantionToMetters;
 					let total = tWater * coeExpantionToMetters;
 					let colorWater = getColorByProf("water", m, total);
-					console.log((m-m%5)/5);
+					m = m - m % 5;
+					console.log(m);
 					blocks = [];
-					let t = 1;
 					if (initWithWater) {
 						t = m;
 						for (let h = 0; h < t; h += tamBlk) {
@@ -671,6 +680,7 @@ function getChunk(x, y, useSeed) {
 	// 🛑 NOVO: Calcula o hash de renderização com base nos dados do chunk
 	const hashValue = calculateRenderHash(chunk);
 	// console.log(chunkGraphics.length);
+	// if(blending) console.log("blending")
 
 	return {
 		x: x,
@@ -872,14 +882,14 @@ function doMove() {
 	noStroke();
 	fill("#ff000040");
 	circle(width / 2, height / 2, 2);
-	rect(width / 2 - tamBlock / 2, height / 2 - tamBlock / 2, tamBlock, tamBlock);
+	rect(width / 2 - tamBlock / (2 / zoom), height / 2 - tamBlock / (2 / zoom), tamBlock * zoom, tamBlock * zoom);
 	//
 	// Função utilitária para facilitar a vida
 	const mod = (n, m) => ((n % m) + m) % m;
 
 	// Calculando os índices brutos (floored para garantir inteiros)
-	let rawX = Math.floor((Math.floor(_poss[0]) - 1) / 3);
-	let rawY = Math.floor((Math.floor(_poss[1]) - 1) / 3);
+	let rawX = Math.floor((Math.floor(_poss[0] - tamBlock / 2)) / (tamBlock));
+	let rawY = Math.floor((Math.floor(_poss[1] - tamBlock / 2)) / (tamBlock));
 
 	// Aplicando o módulo seguro para o tamanho do chunk
 	let x = mod(rawX, tamanho);
@@ -930,20 +940,20 @@ function infinitePlanetView(chunk, x, y) {
 // draw
 function toroide() {
 	// tamanho total do mundo em pixels
-	const worldW = (tamanhoMaximo[0] * 2) * tamanho * tamBlock;
-	const worldH = (tamanhoMaximo[1] * 2) * tamanho * tamBlock;
+	const worldW = (tamanhoMaximo[0]) * tamanho * tamBlock;
+	const worldH = (tamanhoMaximo[1]) * tamanho * tamBlock;
 
 	// wrap toroidal em X
-	if (_poss[0] < -worldW / 2) {
+	if (_poss[0] < -worldW/2) {
 		_poss[0] += worldW;
-	} else if (_poss[0] >= worldW / 2) {
+	} else if (_poss[0] >= worldW/2) {
 		_poss[0] -= worldW;
 	}
 
 	// wrap toroidal em Y
-	if (_poss[1] < -worldH / 2) {
+	if (_poss[1] < 0) {
 		_poss[1] += worldH;
-	} else if (_poss[1] >= worldH / 2) {
+	} else if (_poss[1] >= worldH) {
 		_poss[1] -= worldH;
 	}
 }
@@ -953,6 +963,7 @@ function logicChunks(orderOut) {
 		Math.floor(_poss[0] / (tamBlock * tamanho)),
 		Math.floor(_poss[1] / (tamBlock * tamanho))
 	];
+	// console.log(newChunk)
 	let order = false; // Flag para indicar se o chunk central mudou
 	order = orderOut || false;
 	// Checa se o chunk central mudou
@@ -977,12 +988,12 @@ function logicChunks(orderOut) {
 	}
 	// remove os q passa do maximo
 	toFind = toFind.map(chunk => {
-		if (chunk.x == tamanhoMaximo[0] && chunk.y == 0) chunk.x = -tamanhoMaximo[0];
-		else if (chunk.x == -tamanhoMaximo[0] - 1 && chunk.y == 0) chunk.x = tamanhoMaximo[0] - 1;
+		if (chunk.x == tamanhoMaximo[0]/2 && chunk.y == 0) chunk.x = -tamanhoMaximo[0]/2;
+		else if (chunk.x == -tamanhoMaximo[0]/2 - 1 && chunk.y == 0) chunk.x = tamanhoMaximo[0]/2 - 1;
 		return chunk;
 	});
 	toFind = toFind.filter(chunk =>
-		chunk.x <= tamanhoMaximo[0] - 1 && chunk.x >= -tamanhoMaximo[0] && chunk.y == 0 // somente primeiro level
+		chunk.x <= tamanhoMaximo[0]/2 - 1 && chunk.x >= -tamanhoMaximo[0]/2 && chunk.y == 0 // somente primeiro level
 	); // && chunk.y <= tamanhoMaximo[1] - 1 && chunk.y >= -tamanhoMaximo[1]
 	// 4. Limpeza e Verificação (Culling de Memória)
 	// Filtra o _map para manter apenas os necessários E remove os chunks já existentes da lista 'toFind'
@@ -1225,7 +1236,7 @@ function buttons() {
 		b.draw();
 	}
 }
-function click() {
+function click() { // coloca itens no mapa
 	// Buttons
 	{
 		let local = geral;
@@ -1260,8 +1271,8 @@ function click() {
 				const mod = (n, m) => ((n % m) + m) % m;
 
 				// Calculando os índices brutos (floored para garantir inteiros)
-				let rawX = Math.floor((Math.floor(_poss[0]) - 1) / 3);
-				let rawY = Math.floor((Math.floor(_poss[1]) - 1) / 3);
+				let rawX = Math.floor((Math.floor(_poss[0] - tamBlock / 2)) / (tamBlock));
+				let rawY = Math.floor((Math.floor(_poss[1] - tamBlock / 2)) / (tamBlock));
 
 				// Aplicando o módulo seguro para o tamanho do chunk
 				let x = mod(rawX, tamanho);

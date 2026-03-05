@@ -7,7 +7,7 @@
 // 	document.getElementById("seed").textContent = _seed;
 // };
 // consts
-const ipGeral = "192.168.0.11";
+const ipGeral = "192.168.0.13";
 //
 var tamanho = -1,seed = -1;
 var clientes = [];

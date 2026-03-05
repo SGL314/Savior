@@ -130,12 +130,6 @@ def process():
         lx = gx % tamW
         _map[c_idx]['chunk'][lx] = nCh_global[gx]
     
-     # 4. DEVOLVER OS DADOS
-    for gx in range(totalW):
-        c_idx = gx // tamW
-        lx = gx % tamW
-        _map[c_idx]['chunk'][lx] = nCh_global[gx]
-    
     # 1. ESTADO FUTURO UNIFICADO (nCh)
     nCh_global = [[0 for _ in range(tamH)] for _ in range(totalW)]
     
@@ -151,7 +145,6 @@ def process():
     for p in range(tamH - 1, -1, -1):
         ordem_gx = list(range(totalW))
         if rd(2) == 0: ordem_gx.reverse()
-
         for gx in ordem_gx:
             c_idx = gx // tamW
             lx = gx % tamW
